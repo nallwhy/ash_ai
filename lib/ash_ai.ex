@@ -198,7 +198,7 @@ defmodule AshAi do
     |> LLMChain.add_callback(handler)
     |> then(fn llm_chain ->
       if opts.actor do
-        LLMChain.update_custom_context(llm_chain, %{actor: opts.actor})
+        LLMChain.update_custom_context(llm_chain, %{actor: opts.actor, tenant: opts.tenant})
       else
         llm_chain
       end
