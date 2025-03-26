@@ -123,6 +123,10 @@ defmodule AshAi do
           type: :any,
           doc: "The actor performing any actions."
         ],
+        tenant: [
+          type: {:protocol, Ash.ToTenant},
+          doc: "The tenant to use for the action."
+        ],
         messages: [
           type: {:list, :map},
           default: [],
@@ -775,7 +779,8 @@ defmodule AshAi do
             opts.actor,
             domain,
             tool.resource,
-            action
+            action,
+            opts.tenant
           ) do
         %{tool | domain: domain, action: Ash.Resource.Info.action(tool.resource, tool.action)}
       end
@@ -817,7 +822,12 @@ defmodule AshAi do
     end)
   end
 
-  defp can?(actor, domain, resource, action) do
-    Ash.can?({resource, action}, actor, domain: domain, maybe_is: true, run_queries?: false)
+  defp can?(actor, domain, resource, action, tenant) do
+    Ash.can?({resource, action}, actor,
+      tenant: tenant,
+      domain: domain,
+      maybe_is: true,
+      run_queries?: false
+    )
   end
 end
