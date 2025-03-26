@@ -66,8 +66,8 @@ defmodule AshAi.Actions.Prompt do
           AshAi.functions(
             otp_app: otp_app,
             exclude_actions: [{input.resource, input.action.name}],
-            actor: context[:actor],
-            tenant: context[:tenant]
+            actor: context.actor,
+            tenant: context.tenant
           )
 
         tools ->
@@ -80,8 +80,8 @@ defmodule AshAi.Actions.Prompt do
             tools: List.wrap(tools),
             otp_app: otp_app,
             exclude_actions: [{input.resource, input.action.name}],
-            actor: context[:actor],
-            tenant: context[:tenant]
+            actor: context.actor,
+            tenant: context.tenant
           )
       end
 
