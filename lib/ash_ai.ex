@@ -102,9 +102,11 @@ defmodule AshAi do
     use Spark.Options.Validator,
       schema: [
         actions: [
-          type: {:wrap_list, {:tuple, [{:spark, Ash.Resource}, :atom]}},
+          type:
+            {:wrap_list,
+             {:tuple, [{:spark, Ash.Resource}, {:or, [{:list, :atom}, {:literal, :*}]}]}},
           doc: """
-          A set of {Resource, :action} pairs, or `{Resource, :*}` for all actions. Defaults to everything. If `tools` is also set, both are applied as filters.
+          A set of {Resource, [:action]} pairs, or `{Resource, :*}` for all actions. Defaults to everything. If `tools` is also set, both are applied as filters.
           """
         ],
         tools: [
