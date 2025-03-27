@@ -303,6 +303,7 @@ defmodule AshAi do
       function: fn arguments, context ->
         actor = context[:actor]
         tenant = context[:tenant]
+        input = arguments["input"] || %{}
 
         try do
           case action.type do
@@ -339,7 +340,7 @@ defmodule AshAi do
                   query
                 end
               end)
-              |> Ash.Query.for_read(action.name, arguments["input"] || %{},
+              |> Ash.Query.for_read(action.name, input,
                 domain: domain,
                 actor: actor,
                 tenant: tenant
@@ -367,7 +368,7 @@ defmodule AshAi do
 
               resource
               |> Ash.get!(pkey)
-              |> Ash.Changeset.for_update(action.name, arguments["input"],
+              |> Ash.Changeset.for_update(action.name, input,
                 domain: domain,
                 actor: actor,
                 tenant: tenant
@@ -388,7 +389,7 @@ defmodule AshAi do
 
               resource
               |> Ash.get!(pkey)
-              |> Ash.Changeset.for_destroy(action.name, arguments["input"],
+              |> Ash.Changeset.for_destroy(action.name, input,
                 domain: domain,
                 actor: actor,
                 tenant: tenant
@@ -403,7 +404,7 @@ defmodule AshAi do
 
             :create ->
               resource
-              |> Ash.Changeset.for_create(action.name, arguments["input"],
+              |> Ash.Changeset.for_create(action.name, input,
                 domain: domain,
                 actor: actor,
                 tenant: tenant
@@ -418,7 +419,7 @@ defmodule AshAi do
 
             :action ->
               resource
-              |> Ash.ActionInput.for_action(action.name, arguments["input"],
+              |> Ash.ActionInput.for_action(action.name, input,
                 domain: domain,
                 actor: actor,
                 tenant: tenant
