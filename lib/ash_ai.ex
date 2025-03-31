@@ -66,7 +66,7 @@ defmodule AshAi do
 
   defmodule Tool do
     @moduledoc "An action exposed to LLM agents"
-    defstruct [:name, :resource, :action, :domain]
+    defstruct [:name, :resource, :action, :load, :domain]
   end
 
   @tool %Spark.Dsl.Entity{
@@ -75,7 +75,8 @@ defmodule AshAi do
     schema: [
       name: [type: :atom, required: true],
       resource: [type: {:spark, Ash.Resource}, required: true],
-      action: [type: :atom, required: true]
+      action: [type: :atom, required: true],
+      load: [type: :any, default: []]
     ],
     args: [:name, :resource, :action]
   }
@@ -155,9 +156,7 @@ defmodule AshAi do
   def functions(opts) do
     opts
     |> exposed_tools()
-    |> Enum.map(fn tool ->
-      function(tool.name, tool.domain, tool.resource, tool.action)
-    end)
+    |> Enum.map(&function/1)
   end
 
   # def ask_about_actions_function(otp_app_or_actions) do
@@ -200,7 +199,10 @@ defmodule AshAi do
     |> LLMChain.add_callback(handler)
     |> then(fn llm_chain ->
       if opts.actor do
-        LLMChain.update_custom_context(llm_chain, %{actor: opts.actor, tenant: opts.tenant})
+        LLMChain.update_custom_context(llm_chain, %{
+          actor: opts.actor,
+          tenant: opts.tenant
+        })
       else
         llm_chain
       end
@@ -286,7 +288,7 @@ defmodule AshAi do
     |> Jason.decode!()
   end
 
-  defp function(name, domain, resource, action) do
+  defp function(%Tool{name: name, domain: domain, resource: resource, action: action, load: load}) do
     name = to_string(name)
 
     description =
@@ -304,6 +306,7 @@ defmodule AshAi do
         actor = context[:actor]
         tenant = context[:tenant]
         input = arguments["input"] || %{}
+        opts = [domain: domain, actor: actor, tenant: tenant, load: load]
 
         try do
           case action.type do
@@ -340,11 +343,7 @@ defmodule AshAi do
                   query
                 end
               end)
-              |> Ash.Query.for_read(action.name, input,
-                domain: domain,
-                actor: actor,
-                tenant: tenant
-              )
+              |> Ash.Query.for_read(action.name, input, opts)
               |> Ash.Actions.Read.unpaginated_read(action)
               |> case do
                 {:ok, value} ->
@@ -355,7 +354,9 @@ defmodule AshAi do
               end
               |> then(fn result ->
                 result
-                |> AshJsonApi.Serializer.serialize_value({:array, resource}, [], domain)
+                |> AshJsonApi.Serializer.serialize_value({:array, resource}, [], domain,
+                  load: load
+                )
                 |> Jason.encode!()
                 |> then(&{:ok, &1, result})
               end)
@@ -368,15 +369,11 @@ defmodule AshAi do
 
               resource
               |> Ash.get!(pkey)
-              |> Ash.Changeset.for_update(action.name, input,
-                domain: domain,
-                actor: actor,
-                tenant: tenant
-              )
+              |> Ash.Changeset.for_update(action.name, input, opts)
               |> Ash.update!()
               |> then(fn result ->
                 result
-                |> AshJsonApi.Serializer.serialize_value(resource, [], domain)
+                |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
                 |> Jason.encode!()
                 |> then(&{:ok, &1, result})
               end)
@@ -389,46 +386,34 @@ defmodule AshAi do
 
               resource
               |> Ash.get!(pkey)
-              |> Ash.Changeset.for_destroy(action.name, input,
-                domain: domain,
-                actor: actor,
-                tenant: tenant
-              )
+              |> Ash.Changeset.for_destroy(action.name, input, opts)
               |> Ash.destroy!()
               |> then(fn result ->
                 result
-                |> AshJsonApi.Serializer.serialize_value(resource, [], domain)
+                |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
                 |> Jason.encode!()
                 |> then(&{:ok, &1, result})
               end)
 
             :create ->
               resource
-              |> Ash.Changeset.for_create(action.name, input,
-                domain: domain,
-                actor: actor,
-                tenant: tenant
-              )
+              |> Ash.Changeset.for_create(action.name, input, opts)
               |> Ash.create!()
               |> then(fn result ->
                 result
-                |> AshJsonApi.Serializer.serialize_value(resource, [], domain)
+                |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
                 |> Jason.encode!()
                 |> then(&{:ok, &1, result})
               end)
 
             :action ->
               resource
-              |> Ash.ActionInput.for_action(action.name, input,
-                domain: domain,
-                actor: actor,
-                tenant: tenant
-              )
+              |> Ash.ActionInput.for_action(action.name, input, opts)
               |> Ash.run_action!()
               |> then(fn result ->
                 if action.returns do
                   result
-                  |> AshJsonApi.Serializer.serialize_value(action.returns, [], domain)
+                  |> AshJsonApi.Serializer.serialize_value(action.returns, [], domain, load: load)
                   |> Jason.encode!()
                 else
                   "success"
