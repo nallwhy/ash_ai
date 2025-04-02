@@ -247,7 +247,7 @@ defmodule AshAi do
         |> LLMChain.add_messages([LangChain.Message.new_user!(user_message)])
         |> run_loop()
 
-      {:error, error} ->
+      {:error, _new_chain, error} ->
         raise "Something went wrong:\n #{Exception.format(:error, error)}"
     end
   end
