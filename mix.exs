@@ -6,6 +6,7 @@ defmodule AshAi.MixProject do
       app: :ash_ai,
       version: "0.1.0",
       elixir: "~> 1.17",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
@@ -17,6 +18,14 @@ defmodule AshAi.MixProject do
     [
       extra_applications: [:logger]
     ]
+  end
+
+  defp elixirc_paths(:test) do
+    ["test/support/", "lib/"]
+  end
+
+  defp elixirc_paths(_env) do
+    ["lib/"]
   end
 
   # Run "mix help deps" to learn about dependencies.
