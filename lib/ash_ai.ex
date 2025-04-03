@@ -396,7 +396,7 @@ defmodule AshAi do
               resource
               |> Ash.get!(pkey)
               |> Ash.Changeset.for_destroy(action.name, input, opts)
-              |> Ash.destroy!()
+              |> Ash.destroy!(return_destroyed?: true)
               |> then(fn result ->
                 result
                 |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
@@ -417,7 +417,7 @@ defmodule AshAi do
 
             :action ->
               resource
-              |> Ash.ActionInput.for_action(action.name, input, opts)
+              |> Ash.ActionInput.for_action(action.name, input, opts |> Keyword.drop([:load]))
               |> Ash.run_action!()
               |> then(fn result ->
                 if action.returns do
