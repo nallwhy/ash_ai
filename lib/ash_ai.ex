@@ -66,7 +66,7 @@ defmodule AshAi do
 
   defmodule Tool do
     @moduledoc "An action exposed to LLM agents"
-    defstruct [:name, :resource, :action, :load, :domain]
+    defstruct [:name, :resource, :action, :load, :async, :domain]
   end
 
   @tool %Spark.Dsl.Entity{
@@ -76,7 +76,8 @@ defmodule AshAi do
       name: [type: :atom, required: true],
       resource: [type: {:spark, Ash.Resource}, required: true],
       action: [type: :atom, required: true],
-      load: [type: :any, default: []]
+      load: [type: :any, default: []],
+      async: [type: :boolean, default: true]
     ],
     args: [:name, :resource, :action]
   }
@@ -288,7 +289,14 @@ defmodule AshAi do
     |> Jason.decode!()
   end
 
-  defp function(%Tool{name: name, domain: domain, resource: resource, action: action, load: load}) do
+  defp function(%Tool{
+         name: name,
+         domain: domain,
+         resource: resource,
+         action: action,
+         load: load,
+         async: async
+       }) do
     name = to_string(name)
 
     description =
@@ -302,6 +310,7 @@ defmodule AshAi do
       description: description,
       parameters_schema: parameter_schema,
       strict: true,
+      async: async,
       function: fn arguments, context ->
         actor = context[:actor]
         tenant = context[:tenant]
