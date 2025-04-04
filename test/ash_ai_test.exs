@@ -3,7 +3,7 @@ defmodule AshAiTest do
   alias AshAi.ChatFaker
   alias LangChain.Chains.LLMChain
   alias LangChain.Message
-  alias __MODULE__.{Music, Artist}
+  alias __MODULE__.{Music, Artist, Album}
 
   defmodule Artist do
     use Ash.Resource, domain: Music, data_layer: Ash.DataLayer.Ets
@@ -29,6 +29,38 @@ defmodule AshAiTest do
         end)
       end
     end
+
+    relationships do
+      has_many(:albums, Album)
+    end
+
+    aggregates do
+      count(:albums_count, :albums)
+      sum(:albums_copies_sold, :albums, :copies_sold, default: 0)
+    end
+  end
+
+  defmodule Album do
+    use Ash.Resource, domain: Music, data_layer: Ash.DataLayer.Ets
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id, writable?: true)
+      attribute(:title, :string)
+      attribute(:copies_sold, :integer)
+    end
+
+    relationships do
+      belongs_to(:artist, Artist)
+    end
+
+    actions do
+      default_accept([:*])
+      defaults([:create, :read, :update, :destroy])
+    end
   end
 
   defmodule Music do
@@ -36,14 +68,16 @@ defmodule AshAiTest do
 
     resources do
       resource(Artist)
+      resource(Album)
     end
 
+    @artist_load [:albums_count]
     tools do
-      tool(:list_artists, Artist, :read, async: false)
-      tool(:create_artist, Artist, :create, async: false)
-      tool(:update_artist, Artist, :update, async: false)
-      tool(:delete_artist, Artist, :destroy, async: false)
-      tool(:say_hello, Artist, :say_hello, async: false)
+      tool(:list_artists, Artist, :read, [load: @artist_load, async: false])
+      tool(:create_artist, Artist, :create, [load: @artist_load, async: false])
+      tool(:update_artist, Artist, :update, [load: @artist_load, async: false])
+      tool(:delete_artist, Artist, :destroy, [load: @artist_load, async: false])
+      tool(:say_hello, Artist, :say_hello, [load: @artist_load, async: false])
     end
   end
 
@@ -64,6 +98,8 @@ defmodule AshAiTest do
 
       assert [fetched_artist] = new_chain.last_message.processed_content
       assert fetched_artist.id == artist.id
+      assert fetched_artist.albums_count == 0
+      assert %Ash.NotLoaded{} = fetched_artist.albums_copies_sold
     end
 
     test "with create action" do
@@ -71,7 +107,10 @@ defmodule AshAiTest do
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)
 
-      assert %Artist{name: "Chat Faker"} = new_chain.last_message.processed_content
+      assert created_artist = new_chain.last_message.processed_content
+      assert created_artist.name == "Chat Faker"
+      assert created_artist.albums_count == 0
+      assert %Ash.NotLoaded{} = created_artist.albums_copies_sold
     end
 
     test "with update action", %{artist: artist} do
@@ -80,7 +119,11 @@ defmodule AshAiTest do
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)
 
-      assert %Artist{name: "Chat Faker"} = new_chain.last_message.processed_content
+      assert updated_artist = new_chain.last_message.processed_content
+      assert updated_artist.id == artist.id
+      assert updated_artist.name == "Chat Faker"
+      assert updated_artist.albums_count == 0
+      assert %Ash.NotLoaded{} = updated_artist.albums_copies_sold
     end
 
     test "with destroy action", %{artist: artist} do
@@ -88,10 +131,14 @@ defmodule AshAiTest do
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)
 
-      assert %Artist{name: "Chet Baker"} = new_chain.last_message.processed_content
+      assert destroyed_artist = new_chain.last_message.processed_content
+      assert destroyed_artist.id == artist.id
+      assert destroyed_artist.name == "Chet Baker"
+      assert destroyed_artist.albums_count == 0
+      assert %Ash.NotLoaded{} = destroyed_artist.albums_copies_sold
     end
 
-    test "with action" do
+    test "with generic action" do
       tool_call = tool_call("say_hello", %{"input" => %{"name" => "Chat Faker"}})
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)

@@ -315,7 +315,7 @@ defmodule AshAi do
         actor = context[:actor]
         tenant = context[:tenant]
         input = arguments["input"] || %{}
-        opts = [domain: domain, actor: actor, tenant: tenant, load: load]
+        opts = [domain: domain, actor: actor, tenant: tenant]
 
         try do
           case action.type do
@@ -353,7 +353,7 @@ defmodule AshAi do
                 end
               end)
               |> Ash.Query.for_read(action.name, input, opts)
-              |> Ash.Actions.Read.unpaginated_read(action)
+              |> Ash.Actions.Read.unpaginated_read(action, [load: load])
               |> case do
                 {:ok, value} ->
                   value
@@ -379,7 +379,7 @@ defmodule AshAi do
               resource
               |> Ash.get!(pkey)
               |> Ash.Changeset.for_update(action.name, input, opts)
-              |> Ash.update!()
+              |> Ash.update!(load: load)
               |> then(fn result ->
                 result
                 |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
@@ -396,7 +396,7 @@ defmodule AshAi do
               resource
               |> Ash.get!(pkey)
               |> Ash.Changeset.for_destroy(action.name, input, opts)
-              |> Ash.destroy!(return_destroyed?: true)
+              |> Ash.destroy!(return_destroyed?: true, load: load)
               |> then(fn result ->
                 result
                 |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
@@ -407,7 +407,7 @@ defmodule AshAi do
             :create ->
               resource
               |> Ash.Changeset.for_create(action.name, input, opts)
-              |> Ash.create!()
+              |> Ash.create!(load: load)
               |> then(fn result ->
                 result
                 |> AshJsonApi.Serializer.serialize_value(resource, [], domain, load: load)
@@ -417,7 +417,7 @@ defmodule AshAi do
 
             :action ->
               resource
-              |> Ash.ActionInput.for_action(action.name, input, opts |> Keyword.drop([:load]))
+              |> Ash.ActionInput.for_action(action.name, input, opts)
               |> Ash.run_action!()
               |> then(fn result ->
                 if action.returns do
