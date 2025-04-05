@@ -23,6 +23,7 @@ defmodule AshAi.Actions.Prompt do
         schema =
           AshJsonApi.OpenApi.resource_write_attribute_type(
             %{name: :result, type: input.action.returns, constraints: input.action.constraints},
+            nil,
             :create
           )
 

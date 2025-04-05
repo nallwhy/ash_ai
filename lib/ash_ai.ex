@@ -701,7 +701,7 @@ defmodule AshAi do
                 inputs =
                   Enum.map(field.arguments, fn argument ->
                     {argument.name,
-                     AshJsonApi.OpenApi.resource_write_attribute_type(argument, :create)}
+                     AshJsonApi.OpenApi.resource_write_attribute_type(argument, resource, :create)}
                   end)
 
                 required =
