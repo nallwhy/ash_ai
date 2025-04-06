@@ -36,8 +36,13 @@ defmodule AshAiTest do
     end
 
     aggregates do
-      count(:albums_count, :albums)
-      sum(:albums_copies_sold, :albums, :copies_sold, default: 0)
+      count(:albums_count, :albums, public?: true, sortable?: false)
+
+      sum(:albums_copies_sold, :albums, :copies_sold,
+        default: 0,
+        public?: true,
+        filterable?: false
+      )
     end
   end
 
@@ -74,11 +79,11 @@ defmodule AshAiTest do
 
     @artist_load [:albums_count]
     tools do
-      tool(:list_artists, Artist, :read, [load: @artist_load, async: false])
-      tool(:create_artist, Artist, :create, [load: @artist_load, async: false])
-      tool(:update_artist, Artist, :update, [load: @artist_load, async: false])
-      tool(:delete_artist, Artist, :destroy, [load: @artist_load, async: false])
-      tool(:say_hello, Artist, :say_hello, [load: @artist_load, async: false])
+      tool(:list_artists, Artist, :read, load: @artist_load, async: false)
+      tool(:create_artist, Artist, :create, load: @artist_load, async: false)
+      tool(:update_artist, Artist, :update, load: @artist_load, async: false)
+      tool(:delete_artist, Artist, :destroy, load: @artist_load, async: false)
+      tool(:say_hello, Artist, :say_hello, load: @artist_load, async: false)
     end
   end
 
@@ -141,6 +146,20 @@ defmodule AshAiTest do
                      "not_eq" => %{"type" => "string"}
                    },
                    "additionalProperties" => false
+                 },
+                 "albums_count" => %{
+                   "type" => "object",
+                   "additionalProperties" => false,
+                   "properties" => %{
+                     "eq" => %{"type" => "integer"},
+                     "greater_than" => %{"type" => "integer"},
+                     "greater_than_or_equal" => %{"type" => "integer"},
+                     "in" => %{"items" => %{"type" => "integer"}, "type" => "array"},
+                     "is_nil" => %{"type" => "boolean"},
+                     "less_than" => %{"type" => "integer"},
+                     "less_than_or_equal" => %{"type" => "integer"},
+                     "not_eq" => %{"type" => "integer"}
+                   }
                  }
                }
              }
@@ -176,7 +195,7 @@ defmodule AshAiTest do
                    "field" => %{
                      "type" => "string",
                      "description" => "The field to sort by",
-                     "enum" => ["id", "name"]
+                     "enum" => ["id", "name", "albums_copies_sold"]
                    }
                  }
                }

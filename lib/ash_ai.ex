@@ -353,7 +353,7 @@ defmodule AshAi do
                 end
               end)
               |> Ash.Query.for_read(action.name, input, opts)
-              |> Ash.Actions.Read.unpaginated_read(action, [load: load])
+              |> Ash.Actions.Read.unpaginated_read(action, load: load)
               |> case do
                 {:ok, value} ->
                   value
@@ -623,7 +623,7 @@ defmodule AshAi do
         # i.e first decide to query, and then provide it with a function to call
         # that has all the options Then the filter object can be big & expressive.
         properties:
-          Ash.Resource.Info.fields(resource, [:attributes, :calculations])
+          Ash.Resource.Info.fields(resource, [:attributes, :aggregates, :calculations])
           |> Enum.filter(&(&1.public? && &1.filterable?))
           |> Enum.map(fn field ->
             {field.name, AshJsonApi.OpenApi.raw_filter_type(field, resource)}
