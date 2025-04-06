@@ -13,7 +13,7 @@ defmodule AshAiTest do
     end
 
     attributes do
-      uuid_primary_key(:id, writable?: true)
+      uuid_v7_primary_key(:id, writable?: true)
       attribute(:name, :string, public?: true)
     end
 
@@ -227,7 +227,7 @@ defmodule AshAiTest do
 
       assert function.description == "Call the update action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["properties"]["id"] == %{"type" => "string"}
+      assert function.parameters_schema["properties"]["id"] == %{"type" => "string", "format" => "uuid"}
 
       assert function.parameters_schema["properties"]["input"] == %{
                "type" => "object",
@@ -258,7 +258,7 @@ defmodule AshAiTest do
 
       assert function.description == "Call the destroy action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["properties"]["id"] == %{"type" => "string"}
+      assert function.parameters_schema["properties"]["id"] == %{"type" => "string", "format" => "uuid"}
 
       assert function.parameters_schema["properties"]["input"] == %{
                "type" => "object",

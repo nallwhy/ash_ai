@@ -674,7 +674,12 @@ defmodule AshAi do
 
   defp add_action_specific_properties(properties, resource, %{type: type})
        when type in [:update, :destroy] do
-    pkey = Map.new(Ash.Resource.Info.primary_key(resource), fn key -> {key, %{type: :string}} end)
+    pkey =
+      Map.new(Ash.Resource.Info.primary_key(resource), fn key ->
+        {key,
+         Ash.Resource.Info.attribute(resource, key)
+         |> AshJsonApi.OpenApi.resource_write_attribute_type(resource, type)}
+      end)
 
     Map.merge(properties, pkey)
   end
