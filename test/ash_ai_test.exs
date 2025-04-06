@@ -22,10 +22,11 @@ defmodule AshAiTest do
       defaults([:create, :read, :update, :destroy])
 
       action :say_hello, :string do
+        description("Say hello")
         argument(:name, :string, allow_nil?: false)
 
         run(fn input, _ ->
-          {:ok, "Hello: #{input.arguments.name}"}
+          {:ok, "Hello, #{input.arguments.name}!"}
         end)
       end
     end
@@ -92,9 +93,98 @@ defmodule AshAiTest do
     end
 
     test "with read action", %{artist: artist} do
-      tool_call = tool_call("list_artists", %{"filter" => %{"name" => %{"eq" => artist.name}}})
+      tool_name = "list_artists"
+      chain = chain()
 
-      assert {:ok, new_chain} = chain() |> run_chain(tool_call)
+      assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
+
+      assert function.description == "Call the read action on the AshAiTest.Artist resource"
+
+      assert function.parameters_schema["properties"]["filter"] == %{
+               "type" => "object",
+               "description" => "Filter results",
+               "properties" => %{
+                 "id" => %{
+                   "type" => "object",
+                   "properties" => %{
+                     "eq" => %{"format" => "uuid", "type" => "string"},
+                     "greater_than" => %{"format" => "uuid", "type" => "string"},
+                     "greater_than_or_equal" => %{
+                       "format" => "uuid",
+                       "type" => "string"
+                     },
+                     "in" => %{
+                       "items" => %{"format" => "uuid", "type" => "string"},
+                       "type" => "array"
+                     },
+                     "is_nil" => %{"type" => "boolean"},
+                     "less_than" => %{"format" => "uuid", "type" => "string"},
+                     "less_than_or_equal" => %{
+                       "format" => "uuid",
+                       "type" => "string"
+                     },
+                     "not_eq" => %{"format" => "uuid", "type" => "string"}
+                   },
+                   "additionalProperties" => false
+                 },
+                 "name" => %{
+                   "type" => "object",
+                   "properties" => %{
+                     "contains" => %{"type" => "string"},
+                     "eq" => %{"type" => "string"},
+                     "greater_than" => %{"type" => "string"},
+                     "greater_than_or_equal" => %{"type" => "string"},
+                     "in" => %{"type" => "array", "items" => %{"type" => "string"}},
+                     "is_nil" => %{"type" => "boolean"},
+                     "less_than" => %{"type" => "string"},
+                     "less_than_or_equal" => %{"type" => "string"},
+                     "not_eq" => %{"type" => "string"}
+                   },
+                   "additionalProperties" => false
+                 }
+               }
+             }
+
+      assert function.parameters_schema["properties"]["input"] == %{
+               "type" => "object",
+               "properties" => %{},
+               "required" => []
+             }
+
+      assert function.parameters_schema["properties"]["limit"] == %{
+               "type" => "integer",
+               "description" => "The maximum number of records to return",
+               "default" => 25
+             }
+
+      assert function.parameters_schema["properties"]["offset"] == %{
+               "type" => "integer",
+               "description" => "The number of records to skip",
+               "default" => 0
+             }
+
+      assert function.parameters_schema["properties"]["sort"] == %{
+               "type" => "array",
+               "items" => %{
+                 "type" => "object",
+                 "properties" => %{
+                   "direction" => %{
+                     "type" => "string",
+                     "description" => "The direction to sort by",
+                     "enum" => ["asc", "desc"]
+                   },
+                   "field" => %{
+                     "type" => "string",
+                     "description" => "The field to sort by",
+                     "enum" => ["id", "name"]
+                   }
+                 }
+               }
+             }
+
+      tool_call = tool_call(tool_name, %{"filter" => %{"name" => %{"eq" => artist.name}}})
+
+      assert {:ok, new_chain} = chain |> run_chain(tool_call)
 
       assert [fetched_artist] = new_chain.last_message.processed_content
       assert fetched_artist.id == artist.id
@@ -103,9 +193,25 @@ defmodule AshAiTest do
     end
 
     test "with create action" do
-      tool_call = tool_call("create_artist", %{"input" => %{"name" => "Chat Faker"}})
+      tool_name = "create_artist"
+      chain = chain()
 
-      assert {:ok, new_chain} = chain() |> run_chain(tool_call)
+      assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
+
+      assert function.description == "Call the create action on the AshAiTest.Artist resource"
+
+      assert function.parameters_schema["properties"]["input"] == %{
+               "type" => "object",
+               "properties" => %{
+                 "id" => %{"type" => "string", "format" => "uuid"},
+                 "name" => %{"type" => "string"}
+               },
+               "required" => []
+             }
+
+      tool_call = tool_call(tool_name, %{"input" => %{"name" => "Chat Faker"}})
+
+      assert {:ok, new_chain} = chain |> run_chain(tool_call)
 
       assert created_artist = new_chain.last_message.processed_content
       assert created_artist.name == "Chat Faker"
@@ -114,8 +220,26 @@ defmodule AshAiTest do
     end
 
     test "with update action", %{artist: artist} do
+      tool_name = "update_artist"
+      chain = chain()
+
+      assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
+
+      assert function.description == "Call the update action on the AshAiTest.Artist resource"
+
+      assert function.parameters_schema["properties"]["id"] == %{"type" => "string"}
+
+      assert function.parameters_schema["properties"]["input"] == %{
+               "type" => "object",
+               "properties" => %{
+                 "id" => %{"type" => "string", "format" => "uuid"},
+                 "name" => %{"type" => "string"}
+               },
+               "required" => []
+             }
+
       tool_call =
-        tool_call("update_artist", %{"id" => artist.id, "input" => %{"name" => "Chat Faker"}})
+        tool_call(tool_name, %{"id" => artist.id, "input" => %{"name" => "Chat Faker"}})
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)
 
@@ -127,7 +251,22 @@ defmodule AshAiTest do
     end
 
     test "with destroy action", %{artist: artist} do
-      tool_call = tool_call("delete_artist", %{"id" => artist.id})
+      tool_name = "delete_artist"
+      chain = chain()
+
+      assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
+
+      assert function.description == "Call the destroy action on the AshAiTest.Artist resource"
+
+      assert function.parameters_schema["properties"]["id"] == %{"type" => "string"}
+
+      assert function.parameters_schema["properties"]["input"] == %{
+               "type" => "object",
+               "properties" => %{},
+               "required" => []
+             }
+
+      tool_call = tool_call(tool_name, %{"id" => artist.id})
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)
 
@@ -139,11 +278,24 @@ defmodule AshAiTest do
     end
 
     test "with generic action" do
-      tool_call = tool_call("say_hello", %{"input" => %{"name" => "Chat Faker"}})
+      tool_name = "say_hello"
+      chain = chain()
+
+      assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
+
+      assert function.description == "Say hello"
+
+      assert function.parameters_schema["properties"]["input"] == %{
+               "type" => "object",
+               "properties" => %{"name" => %{"type" => "string"}},
+               "required" => ["name"]
+             }
+
+      tool_call = tool_call(tool_name, %{"input" => %{"name" => "Chat Faker"}})
 
       assert {:ok, new_chain} = chain() |> run_chain(tool_call)
 
-      assert "Hello: Chat Faker" = new_chain.last_message.processed_content
+      assert "Hello, Chat Faker!" = new_chain.last_message.processed_content
     end
   end
 
