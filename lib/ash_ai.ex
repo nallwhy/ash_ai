@@ -282,7 +282,8 @@ defmodule AshAi do
                 AshJsonApi.OpenApi.required_write_attributes(resource, action.arguments, action)
             }
           }
-          |> add_action_specific_properties(resource, action)
+          |> add_action_specific_properties(resource, action),
+        additionalProperties: false
       }
     end)
     |> Jason.encode!()

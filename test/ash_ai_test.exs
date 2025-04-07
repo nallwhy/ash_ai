@@ -105,6 +105,8 @@ defmodule AshAiTest do
 
       assert function.description == "Call the read action on the AshAiTest.Artist resource"
 
+      assert function.parameters_schema["additionalProperties"] == false
+
       assert function.parameters_schema["properties"]["filter"] == %{
                "type" => "object",
                "description" => "Filter results",
@@ -201,7 +203,8 @@ defmodule AshAiTest do
                }
              }
 
-      tool_call = tool_call(tool_name, %{"filter" => %{"name" => %{"eq" => artist.name}}})
+      tool_call =
+        tool_call(tool_name, %{"filter" => %{"name" => %{"eq" => artist.name}}})
 
       assert {:ok, new_chain} = chain |> run_chain(tool_call)
 
@@ -218,6 +221,8 @@ defmodule AshAiTest do
       assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
 
       assert function.description == "Call the create action on the AshAiTest.Artist resource"
+
+      assert function.parameters_schema["additionalProperties"] == false
 
       assert function.parameters_schema["properties"]["input"] == %{
                "type" => "object",
@@ -246,7 +251,12 @@ defmodule AshAiTest do
 
       assert function.description == "Call the update action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["properties"]["id"] == %{"type" => "string", "format" => "uuid"}
+      assert function.parameters_schema["additionalProperties"] == false
+
+      assert function.parameters_schema["properties"]["id"] == %{
+               "type" => "string",
+               "format" => "uuid"
+             }
 
       assert function.parameters_schema["properties"]["input"] == %{
                "type" => "object",
@@ -277,7 +287,12 @@ defmodule AshAiTest do
 
       assert function.description == "Call the destroy action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["properties"]["id"] == %{"type" => "string", "format" => "uuid"}
+      assert function.parameters_schema["additionalProperties"] == false
+
+      assert function.parameters_schema["properties"]["id"] == %{
+               "type" => "string",
+               "format" => "uuid"
+             }
 
       assert function.parameters_schema["properties"]["input"] == %{
                "type" => "object",
@@ -303,6 +318,8 @@ defmodule AshAiTest do
       assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
 
       assert function.description == "Say hello"
+
+      assert function.parameters_schema["additionalProperties"] == false
 
       assert function.parameters_schema["properties"]["input"] == %{
                "type" => "object",
