@@ -374,7 +374,7 @@ defmodule AshAi.OpenApiTest do
       |> Enum.into(%{})
     end
 
-    def to_map(value = %{__struct__: _}, opts) do
+    def to_map(%{__struct__: _} = value, opts) do
       value
       |> Extendable.to_map()
       |> to_map(opts)
@@ -400,7 +400,7 @@ defmodule AshAi.OpenApiTest do
     def to_map(value, _opts) when is_atom(value), do: to_string(value)
     def to_map(value, _opts), do: value
 
-    defp to_map_example(value = %{__struct__: _}, opts) do
+    defp to_map_example(%{__struct__: _} = value, opts) do
       value
       |> Extendable.to_map()
       |> to_map_example(opts)
