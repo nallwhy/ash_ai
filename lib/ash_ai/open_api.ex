@@ -514,7 +514,7 @@ defmodule AshAi.OpenApi do
   end
 
   defp resource_attribute_type(%{type: Ash.Type.Date}, _resource, _format) do
-    %{type: :number, format: :date}
+    %{type: :string, format: :date}
   end
 
   defp resource_attribute_type(%{type: Ash.Type.UtcDatetime}, _resource, _format) do
@@ -745,7 +745,7 @@ defmodule AshAi.OpenApi do
     key = if Map.has_key?(schema, :description), do: :description, else: "description"
 
     new_description =
-      if attr.name in fields do
+      if is_nil(fields) || attr.name in fields do
         case Map.get(schema, key) do
           nil ->
             "Field included by default."

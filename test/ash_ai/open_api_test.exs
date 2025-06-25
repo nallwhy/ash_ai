@@ -4,6 +4,14 @@ defmodule AshAi.OpenApiTest do
 
   alias __MODULE__.{Music, Artist, Album}
 
+  defmodule Bio do
+    use Ash.Resource, data_layer: :embedded
+
+    attributes do
+      attribute :birth, :date, allow_nil?: false, public?: true
+    end
+  end
+
   defmodule Artist do
     use Ash.Resource,
       domain: Music,
@@ -16,6 +24,7 @@ defmodule AshAi.OpenApiTest do
     attributes do
       uuid_v7_primary_key(:id, writable?: true)
       attribute(:name, :string, public?: true)
+      attribute(:bio, Bio, allow_nil?: false, public?: true)
     end
 
     actions do
