@@ -618,7 +618,7 @@ defmodule AshAi.OpenApi do
         %{
           type: :object,
           additionalProperties: false,
-          properties: resource_attributes(instance_of, nil, format, false),
+          properties: resource_attributes(instance_of, format, false),
           required: required_attributes(instance_of)
         }
         |> add_null_for_non_required()
@@ -638,7 +638,7 @@ defmodule AshAi.OpenApi do
         %{
           type: :object,
           additionalProperties: false,
-          properties: resource_attributes(type, nil, format, false),
+          properties: resource_attributes(type, format, false),
           required: required_attributes(type)
         }
         |> add_null_for_non_required()
@@ -666,13 +666,12 @@ defmodule AshAi.OpenApi do
 
   @spec resource_attributes(
           resource :: module,
-          fields :: nil | list(atom),
           format :: content_type_format(),
           hide_pkeys? :: boolean()
         ) :: %{
           atom => map()
         }
-  defp resource_attributes(resource, fields, format, hide_pkeys?) do
+  defp resource_attributes(resource, format, hide_pkeys?) do
     resource
     |> Ash.Resource.Info.public_attributes()
     |> Enum.concat(Ash.Resource.Info.public_calculations(resource))
@@ -729,7 +728,7 @@ defmodule AshAi.OpenApi do
        resource_attribute_type(attr, resource, format)
        |> with_attribute_description(attr)
        |> with_attribute_nullability(attr)
-       |> with_comment_on_included(attr, fields)}
+       |> with_comment_on_included()}
     end)
   end
 
@@ -740,25 +739,21 @@ defmodule AshAi.OpenApi do
     |> Enum.map(& &1.name)
   end
 
-  @spec with_comment_on_included(map(), map(), nil | list(atom)) :: map()
-  defp with_comment_on_included(schema, attr, fields) do
+  @spec with_comment_on_included(map()) :: map()
+  defp with_comment_on_included(schema) do
     key = if Map.has_key?(schema, :description), do: :description, else: "description"
 
     new_description =
-      if is_nil(fields) || attr.name in fields do
-        case Map.get(schema, key) do
-          nil ->
-            "Field included by default."
+      case Map.get(schema, key) do
+        nil ->
+          "Field included by default."
 
-          description ->
-            if String.ends_with?(description, ["!", "."]) do
-              description <> " Field included by default."
-            else
-              description <> ". Field included by default."
-            end
-        end
-      else
-        Map.get(schema, key) || ""
+        description ->
+          if String.ends_with?(description, ["!", "."]) do
+            description <> " Field included by default."
+          else
+            description <> ". Field included by default."
+          end
       end
 
     Map.put(schema, key, new_description)
