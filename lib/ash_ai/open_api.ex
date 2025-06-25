@@ -167,7 +167,7 @@ defmodule AshAi.OpenApi do
             Map.put(acc, key, value)
           else
             description = value |> Map.get(:description)
-            value = value |> Map.put(:description, nil)
+            value = value |> Map.delete(:description)
 
             new_value =
               %{

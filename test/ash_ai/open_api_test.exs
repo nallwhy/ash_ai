@@ -2,7 +2,7 @@ defmodule AshAi.OpenApiTest do
   use ExUnit.Case, async: true
   alias AshAi.ChatFaker
 
-  alias __MODULE__.{Music, Artist, Album}
+  alias __MODULE__.{Music, Artist, Album, Schema}
 
   defmodule Bio do
     use Ash.Resource, data_layer: :embedded
@@ -258,7 +258,7 @@ defmodule AshAi.OpenApiTest do
               resource,
               &AshJsonApi.OpenApi.resource_write_attribute_type/4
             )
-            |> OpenApiSpex.OpenApi.to_map()
+            |> Schema.to_map()
 
           assert vendored_schema == old_schema
         end
@@ -279,7 +279,7 @@ defmodule AshAi.OpenApiTest do
               resource,
               AshJsonApi.OpenApi
             )
-            |> OpenApiSpex.OpenApi.to_map()
+            |> Schema.to_map()
 
           assert vendored_schema == old_schema
         end
@@ -344,5 +344,78 @@ defmodule AshAi.OpenApiTest do
         value
       )
     end)
+  end
+
+  defmodule Schema do
+    alias OpenApiSpex.Extendable
+
+    @vendor_extensions ~w(
+      x-struct
+      x-validate
+      x-parameter-content-parsers
+    )
+
+    def to_map(value), do: to_map(value, [])
+    def to_map(%Regex{source: source}, _opts), do: source
+
+    def to_map(%object{} = value, opts) when object in [MediaType, Schema, Example] do
+      value
+      |> Extendable.to_map()
+      |> Stream.map(fn
+        {:value, v} when object == Example -> {"value", to_map_example(v, opts)}
+        {:example, v} -> {"example", to_map_example(v, opts)}
+        {k, v} -> {to_string(k), to_map(v, opts)}
+      end)
+      |> Stream.filter(fn
+        {k, _} when k in @vendor_extensions -> opts[:vendor_extensions]
+        {_, nil} -> false
+        _ -> true
+      end)
+      |> Enum.into(%{})
+    end
+
+    def to_map(value = %{__struct__: _}, opts) do
+      value
+      |> Extendable.to_map()
+      |> to_map(opts)
+    end
+
+    def to_map(value, opts) when is_map(value) do
+      value
+      |> Stream.map(fn {k, v} -> {to_string(k), to_map(v, opts)} end)
+      |> Stream.filter(fn
+        {_, nil} -> false
+        _ -> true
+      end)
+      |> Enum.into(%{})
+    end
+
+    def to_map(value, opts) when is_list(value) do
+      Enum.map(value, &to_map(&1, opts))
+    end
+
+    def to_map(nil, _opts), do: nil
+    def to_map(true, _opts), do: true
+    def to_map(false, _opts), do: false
+    def to_map(value, _opts) when is_atom(value), do: to_string(value)
+    def to_map(value, _opts), do: value
+
+    defp to_map_example(value = %{__struct__: _}, opts) do
+      value
+      |> Extendable.to_map()
+      |> to_map_example(opts)
+    end
+
+    defp to_map_example(value, opts) when is_map(value) do
+      value
+      |> Stream.map(fn {k, v} -> {to_string(k), to_map_example(v, opts)} end)
+      |> Enum.into(%{})
+    end
+
+    defp to_map_example(value, opts) when is_list(value) do
+      Enum.map(value, &to_map_example(&1, opts))
+    end
+
+    defp to_map_example(value, opts), do: to_map(value, opts)
   end
 end
