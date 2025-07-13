@@ -55,7 +55,7 @@ defmodule AshAi.ToolTest do
       {:ok, resource: resource}
     end
 
-    test "includes public and loaded fields", %{resource: resource} do
+    test "includes public and loaded fields" do
       tool_call = %LangChain.Message.ToolCall{
         status: :complete,
         type: :function,
