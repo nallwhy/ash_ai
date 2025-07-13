@@ -106,21 +106,6 @@ defmodule AshAi.OpenApiTest do
     end
   end
 
-  defmodule Summary do
-    use Ash.Resource, data_layer: :embedded
-
-    attributes do
-      attribute :summary, :string, public?: true
-      attribute :word_count, :integer, public?: true
-      attribute :key_points, {:array, :string}, public?: true
-    end
-
-    actions do
-      default_accept([:*])
-      defaults([:create, :read])
-    end
-  end
-
   defmodule TestResource do
     use Ash.Resource,
       domain: TestDomain,
@@ -174,44 +159,6 @@ defmodule AshAi.OpenApiTest do
                 })
               end,
               adapter: {AshAi.Actions.Prompt.Adapter.CompletionTool, [max_runs: 10]}
-            )
-      end
-
-      action :generate_summary, Summary do
-        description("Generate a summary of a document")
-        argument(:content, :string, allow_nil?: false)
-        argument(:max_words, :integer, allow_nil?: true)
-
-        run prompt(
-              fn _input, _context ->
-                ChatFaker.new!(%{
-                  expect_fun: fn _model, _messages, tools ->
-                    completion_tool = Enum.find(tools, &(&1.name == "complete_request"))
-
-                    tool_call = %LangChain.Message.ToolCall{
-                      status: :complete,
-                      type: :function,
-                      call_id: "call_456",
-                      name: "complete_request",
-                      arguments: %{
-                        "result" => %{
-                          "summary" => "A well-written document about machine learning concepts.",
-                          "word_count" => 58,
-                          "key_points" => ["AI fundamentals", "Neural networks", "Deep learning"]
-                        }
-                      },
-                      index: 0
-                    }
-
-                    {:ok,
-                     LangChain.Message.new_assistant!(%{
-                       status: :complete,
-                       tool_calls: [tool_call]
-                     })}
-                  end
-                })
-              end,
-              adapter: {AshAi.Actions.Prompt.Adapter.CompletionTool, [max_runs: 5]}
             )
       end
     end
