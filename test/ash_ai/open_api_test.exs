@@ -18,41 +18,40 @@ defmodule AshAi.OpenApiTest do
       data_layer: Ash.DataLayer.Ets
 
     ets do
-      private?(true)
+      private? true
     end
 
     attributes do
-      uuid_v7_primary_key(:id, writable?: true)
-      attribute(:name, :string, public?: true)
-      attribute(:bio, Bio, allow_nil?: false, public?: true)
+      uuid_v7_primary_key :id, writable?: true
+      attribute :name, :string, public?: true
+      attribute :bio, Bio, allow_nil?: false, public?: true
     end
 
     actions do
-      default_accept([:*])
-      defaults([:create, :read, :update, :destroy])
+      default_accept [:*]
+      defaults [:create, :read, :update, :destroy]
 
       action :say_hello, :string do
-        description("Say hello")
-        argument(:name, :string, allow_nil?: false)
+        description "Say hello"
+        argument :name, :string, allow_nil?: false
 
-        run(fn input, _ ->
+        run fn input, _ ->
           {:ok, "Hello, #{input.arguments.name}!"}
-        end)
+        end
       end
     end
 
     relationships do
-      has_many(:albums, Album)
+      has_many :albums, Album
     end
 
     aggregates do
-      count(:albums_count, :albums, public?: true, sortable?: false)
+      count :albums_count, :albums, public?: true, sortable?: false
 
-      sum(:albums_copies_sold, :albums, :copies_sold,
+      sum :albums_copies_sold, :albums, :copies_sold,
         default: 0,
         public?: true,
         filterable?: false
-      )
     end
   end
 
@@ -62,22 +61,22 @@ defmodule AshAi.OpenApiTest do
       data_layer: Ash.DataLayer.Ets
 
     ets do
-      private?(true)
+      private? true
     end
 
     attributes do
-      uuid_primary_key(:id, writable?: true)
-      attribute(:title, :string)
-      attribute(:copies_sold, :integer)
+      uuid_primary_key :id, writable?: true
+      attribute :title, :string
+      attribute :copies_sold, :integer
     end
 
     relationships do
-      belongs_to(:artist, Artist)
+      belongs_to :artist, Artist
     end
 
     actions do
-      default_accept([:*])
-      defaults([:create, :read, :update, :destroy])
+      default_accept [:*]
+      defaults [:create, :read, :update, :destroy]
     end
   end
 
@@ -86,8 +85,8 @@ defmodule AshAi.OpenApiTest do
       extensions: [AshAi]
 
     resources do
-      resource(Artist)
-      resource(Album)
+      resource Artist
+      resource Album
     end
   end
 
@@ -101,8 +100,8 @@ defmodule AshAi.OpenApiTest do
     end
 
     actions do
-      default_accept([:*])
-      defaults([:create, :read])
+      default_accept [:*]
+      defaults [:create, :read]
     end
   end
 
@@ -113,21 +112,21 @@ defmodule AshAi.OpenApiTest do
       extensions: [AshAi]
 
     ets do
-      private?(true)
+      private? true
     end
 
     attributes do
-      uuid_v7_primary_key(:id, writable?: true)
-      attribute(:name, :string, public?: true, description: "The name of the test resource")
+      uuid_v7_primary_key :id, writable?: true
+      attribute :name, :string, public?: true, description: "The name of the test resource"
     end
 
     actions do
-      default_accept([:*])
-      defaults([:create, :read, :update, :destroy])
+      default_accept [:*]
+      defaults [:create, :read, :update, :destroy]
 
       action :analyze_sentiment, Sentiment do
-        description("Analyze the sentiment of a given text")
-        argument(:text, :string, allow_nil?: false)
+        description "Analyze the sentiment of a given text"
+        argument :text, :string, allow_nil?: false
 
         run prompt(
               fn _input, _context ->
