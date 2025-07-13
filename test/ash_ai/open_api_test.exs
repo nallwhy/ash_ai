@@ -193,7 +193,7 @@ defmodule AshAi.OpenApiTest do
             get_parameter_schema_properties(
               action,
               resource,
-              &AshAi.OpenApi.resource_write_attribute_type/4
+              &AshAi.OpenApi.resource_write_attribute_type/3
             )
             |> JSON.encode!()
             |> JSON.decode!()
@@ -202,7 +202,7 @@ defmodule AshAi.OpenApiTest do
             get_parameter_schema_properties(
               action,
               resource,
-              &AshJsonApi.OpenApi.resource_write_attribute_type/4
+              &AshJsonApi.OpenApi.resource_write_attribute_type/3
             )
             |> Schema.to_map()
 
@@ -270,8 +270,7 @@ defmodule AshAi.OpenApiTest do
             fun.(
               attribute,
               resource,
-              action.type,
-              :json
+              action.type
             )
 
           {attribute.name, value}
@@ -282,7 +281,7 @@ defmodule AshAi.OpenApiTest do
     |> Enum.filter(& &1.public?)
     |> Enum.reduce(attributes, fn argument, attributes ->
       value =
-        fun.(argument, resource, :create, :json)
+        fun.(argument, resource, :create)
 
       Map.put(
         attributes,

@@ -299,8 +299,7 @@ defmodule AshAi do
             AshAi.OpenApi.resource_write_attribute_type(
               attribute,
               resource,
-              action.type,
-              :json
+              action.type
             )
 
           {attribute.name, value}
@@ -312,7 +311,7 @@ defmodule AshAi do
       |> Enum.filter(& &1.public?)
       |> Enum.reduce(attributes, fn argument, attributes ->
         value =
-          AshAi.OpenApi.resource_write_attribute_type(argument, resource, :create, :json)
+          AshAi.OpenApi.resource_write_attribute_type(argument, resource, :create)
 
         Map.put(
           attributes,
@@ -1084,7 +1083,7 @@ defmodule AshAi do
         When checking permissions, we check the action using an empty input.
         Your action should be prepared for this.
 
-        For create/update/destroy actions, you may need to add `only_when_valid?: true` 
+        For create/update/destroy actions, you may need to add `only_when_valid?: true`
         to the changes, for other things, you may want to check validity of the changeset,
         query or action input.
 
