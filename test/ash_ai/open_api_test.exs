@@ -2,7 +2,7 @@ defmodule AshAi.OpenApiTest do
   use ExUnit.Case, async: true
   alias AshAi.ChatFaker
 
-  alias __MODULE__.{Music, Artist, Album, Schema}
+  alias __MODULE__.{Music, Artist, Album}
 
   defmodule Bio do
     use Ash.Resource, data_layer: :embedded
@@ -122,7 +122,6 @@ defmodule AshAi.OpenApiTest do
 
     actions do
       default_accept [:*]
-      defaults [:create, :read, :update, :destroy]
 
       action :analyze_sentiment, Sentiment do
         description "Analyze the sentiment of a given text"
@@ -173,63 +172,281 @@ defmodule AshAi.OpenApiTest do
     end
   end
 
-  describe "AshJsonApi.OpenApi vendoring regression tests" do
-    setup do
-      resources =
-        [TestResource, Artist, Album]
-        |> Enum.map(fn resource ->
-          actions = Ash.Resource.Info.actions(resource)
+  describe "resource_write_attribute_type/3" do
+    test "with TestResource" do
+      resource = TestResource
 
-          {resource, actions}
-        end)
+      action = resource |> Ash.Resource.Info.action(:analyze_sentiment)
 
-      {:ok, resources: resources}
+      assert get_parameter_schema_properties(
+               action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{text: %{type: :string}}
     end
 
-    test "for parameter_schema input properties", %{resources: resources} do
-      for {resource, actions} <- resources do
-        for action <- actions do
-          vendored_schema =
-            get_parameter_schema_properties(
-              action,
-              resource,
-              &AshAi.OpenApi.resource_write_attribute_type/3
-            )
-            |> JSON.encode!()
-            |> JSON.decode!()
+    test "with Artist" do
+      resource = Artist
 
-          old_schema =
-            get_parameter_schema_properties(
-              action,
-              resource,
-              &AshJsonApi.OpenApi.resource_write_attribute_type/3
-            )
-            |> Schema.to_map()
+      create_action = resource |> Ash.Resource.Info.action(:create)
 
-          assert vendored_schema == old_schema
-        end
-      end
+      assert get_parameter_schema_properties(
+               create_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{
+               id: %{type: :string, format: :uuid},
+               name: %{type: :string},
+               bio: %{
+                 type: :object,
+                 properties: %{birth: %{type: :string, format: :date}},
+                 required: [:birth],
+                 additionalProperties: false
+               }
+             }
+
+      update_action = resource |> Ash.Resource.Info.action(:update)
+
+      assert get_parameter_schema_properties(
+               update_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{
+               id: %{type: :string, format: :uuid},
+               name: %{type: :string},
+               bio: %{
+                 type: :object,
+                 properties: %{
+                   birth: %{"anyOf" => [%{type: :string, format: :date}, %{"type" => "null"}]}
+                 },
+                 required: [],
+                 additionalProperties: false
+               }
+             }
+
+      destroy_action = resource |> Ash.Resource.Info.action(:destroy)
+
+      assert get_parameter_schema_properties(
+               destroy_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{}
+
+      read_action = resource |> Ash.Resource.Info.action(:read)
+
+      assert get_parameter_schema_properties(
+               read_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{}
+
+      say_hello_action = resource |> Ash.Resource.Info.action(:say_hello)
+
+      assert get_parameter_schema_properties(
+               say_hello_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{name: %{type: :string}}
     end
 
-    test "for action specific properties", %{resources: resources} do
-      for {resource, actions} <- resources do
-        for action <- actions do
-          vendored_schema =
-            get_action_specific_properties(action, resource, AshAi.OpenApi)
-            |> JSON.encode!()
-            |> JSON.decode!()
+    test "with Album" do
+      resource = Album
 
-          old_schema =
-            get_action_specific_properties(
-              action,
-              resource,
-              AshJsonApi.OpenApi
-            )
-            |> Schema.to_map()
+      create_action = resource |> Ash.Resource.Info.action(:create)
 
-          assert vendored_schema == old_schema
-        end
-      end
+      assert get_parameter_schema_properties(
+               create_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{id: %{type: :string, format: :uuid}}
+
+      update_action = resource |> Ash.Resource.Info.action(:update)
+
+      assert get_parameter_schema_properties(
+               update_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{id: %{type: :string, format: :uuid}}
+
+      destroy_action = resource |> Ash.Resource.Info.action(:destroy)
+
+      assert get_parameter_schema_properties(
+               destroy_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{}
+
+      read_action = resource |> Ash.Resource.Info.action(:read)
+
+      assert get_parameter_schema_properties(
+               read_action,
+               resource,
+               &AshAi.OpenApi.resource_write_attribute_type/3
+             ) == %{}
+    end
+  end
+
+  describe "raw_filter_type/2" do
+    test "with Artist" do
+      resource = Artist
+
+      read_action = resource |> Ash.Resource.Info.action(:read)
+
+      assert get_action_specific_properties(
+               read_action,
+               resource,
+               AshAi.OpenApi
+             ) == %{
+               id: %{
+                 type: :object,
+                 properties: %{
+                   in: %{type: :array, items: %{type: :string, format: :uuid}},
+                   eq: %{type: :string, format: :uuid},
+                   is_nil: %{type: :boolean},
+                   less_than: %{type: :string, format: :uuid},
+                   greater_than: %{type: :string, format: :uuid},
+                   not_eq: %{type: :string, format: :uuid},
+                   less_than_or_equal: %{type: :string, format: :uuid},
+                   greater_than_or_equal: %{type: :string, format: :uuid}
+                 },
+                 additionalProperties: false
+               },
+               name: %{
+                 type: :object,
+                 properties: %{
+                   in: %{type: :array, items: %{type: :string}},
+                   eq: %{type: :string},
+                   is_nil: %{type: :boolean},
+                   less_than: %{type: :string},
+                   greater_than: %{type: :string},
+                   not_eq: %{type: :string},
+                   less_than_or_equal: %{type: :string},
+                   greater_than_or_equal: %{type: :string},
+                   contains: %{type: :string}
+                 },
+                 additionalProperties: false
+               },
+               bio: %{
+                 type: :object,
+                 properties: %{
+                   eq: %{
+                     type: :object,
+                     required: [:birth],
+                     properties: %{
+                       birth: %{
+                         :type => :string,
+                         :format => :date,
+                         "description" => "Field included by default."
+                       }
+                     },
+                     additionalProperties: false
+                   },
+                   is_nil: %{type: :boolean},
+                   less_than: %{
+                     type: :object,
+                     required: [:birth],
+                     properties: %{
+                       birth: %{
+                         :type => :string,
+                         :format => :date,
+                         "description" => "Field included by default."
+                       }
+                     },
+                     additionalProperties: false
+                   },
+                   greater_than: %{
+                     type: :object,
+                     required: [:birth],
+                     properties: %{
+                       birth: %{
+                         :type => :string,
+                         :format => :date,
+                         "description" => "Field included by default."
+                       }
+                     },
+                     additionalProperties: false
+                   },
+                   not_eq: %{
+                     type: :object,
+                     required: [:birth],
+                     properties: %{
+                       birth: %{
+                         :type => :string,
+                         :format => :date,
+                         "description" => "Field included by default."
+                       }
+                     },
+                     additionalProperties: false
+                   },
+                   less_than_or_equal: %{
+                     type: :object,
+                     required: [:birth],
+                     properties: %{
+                       birth: %{
+                         :type => :string,
+                         :format => :date,
+                         "description" => "Field included by default."
+                       }
+                     },
+                     additionalProperties: false
+                   },
+                   greater_than_or_equal: %{
+                     type: :object,
+                     required: [:birth],
+                     properties: %{
+                       birth: %{
+                         :type => :string,
+                         :format => :date,
+                         "description" => "Field included by default."
+                       }
+                     },
+                     additionalProperties: false
+                   }
+                 },
+                 additionalProperties: false
+               },
+               albums_count: %{
+                 type: :object,
+                 properties: %{
+                   in: %{type: :array, items: %{type: :integer}},
+                   eq: %{type: :integer},
+                   is_nil: %{type: :boolean},
+                   less_than: %{type: :integer},
+                   greater_than: %{type: :integer},
+                   not_eq: %{type: :integer},
+                   less_than_or_equal: %{type: :integer},
+                   greater_than_or_equal: %{type: :integer}
+                 },
+                 additionalProperties: false
+               }
+             }
+    end
+
+    test "with Album" do
+      resource = Album
+
+      read_action = resource |> Ash.Resource.Info.action(:read)
+
+      assert get_action_specific_properties(
+               read_action,
+               resource,
+               AshAi.OpenApi
+             ) == %{
+               id: %{
+                 type: :object,
+                 properties: %{
+                   in: %{type: :array, items: %{type: :string, format: :uuid}},
+                   eq: %{type: :string, format: :uuid},
+                   is_nil: %{type: :boolean},
+                   less_than: %{type: :string, format: :uuid},
+                   greater_than: %{type: :string, format: :uuid},
+                   not_eq: %{type: :string, format: :uuid},
+                   less_than_or_equal: %{type: :string, format: :uuid},
+                   greater_than_or_equal: %{type: :string, format: :uuid}
+                 },
+                 additionalProperties: false
+               }
+             }
     end
   end
 
@@ -241,20 +458,6 @@ defmodule AshAi.OpenApiTest do
 
       {field.name, value}
     end)
-  end
-
-  defp get_action_specific_properties(%{type: type}, resource, module)
-       when type in [:update, :destroy] do
-    Map.new(Ash.Resource.Info.primary_key(resource), fn key ->
-      attribute = Ash.Resource.Info.attribute(resource, key)
-      value = apply(module, :resource_write_attribute_type, [attribute, resource, key])
-
-      {key, value}
-    end)
-  end
-
-  defp get_action_specific_properties(_action, _resource, _module) do
-    %{}
   end
 
   defp get_parameter_schema_properties(action, resource, fun) do
@@ -289,78 +492,5 @@ defmodule AshAi.OpenApiTest do
         value
       )
     end)
-  end
-
-  defmodule Schema do
-    alias OpenApiSpex.Extendable
-
-    @vendor_extensions ~w(
-      x-struct
-      x-validate
-      x-parameter-content-parsers
-    )
-
-    def to_map(value), do: to_map(value, [])
-    def to_map(%Regex{source: source}, _opts), do: source
-
-    def to_map(%object{} = value, opts) when object in [MediaType, Schema, Example] do
-      value
-      |> Extendable.to_map()
-      |> Stream.map(fn
-        {:value, v} when object == Example -> {"value", to_map_example(v, opts)}
-        {:example, v} -> {"example", to_map_example(v, opts)}
-        {k, v} -> {to_string(k), to_map(v, opts)}
-      end)
-      |> Stream.filter(fn
-        {k, _} when k in @vendor_extensions -> opts[:vendor_extensions]
-        {_, nil} -> false
-        _ -> true
-      end)
-      |> Enum.into(%{})
-    end
-
-    def to_map(%{__struct__: _} = value, opts) do
-      value
-      |> Extendable.to_map()
-      |> to_map(opts)
-    end
-
-    def to_map(value, opts) when is_map(value) do
-      value
-      |> Stream.map(fn {k, v} -> {to_string(k), to_map(v, opts)} end)
-      |> Stream.filter(fn
-        {_, nil} -> false
-        _ -> true
-      end)
-      |> Enum.into(%{})
-    end
-
-    def to_map(value, opts) when is_list(value) do
-      Enum.map(value, &to_map(&1, opts))
-    end
-
-    def to_map(nil, _opts), do: nil
-    def to_map(true, _opts), do: true
-    def to_map(false, _opts), do: false
-    def to_map(value, _opts) when is_atom(value), do: to_string(value)
-    def to_map(value, _opts), do: value
-
-    defp to_map_example(%{__struct__: _} = value, opts) do
-      value
-      |> Extendable.to_map()
-      |> to_map_example(opts)
-    end
-
-    defp to_map_example(value, opts) when is_map(value) do
-      value
-      |> Stream.map(fn {k, v} -> {to_string(k), to_map_example(v, opts)} end)
-      |> Enum.into(%{})
-    end
-
-    defp to_map_example(value, opts) when is_list(value) do
-      Enum.map(value, &to_map_example(&1, opts))
-    end
-
-    defp to_map_example(value, opts), do: to_map(value, opts)
   end
 end
