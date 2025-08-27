@@ -356,7 +356,7 @@ defmodule AshAi do
     end
   end
 
-  defp parameter_schema(_domain, resource, action) do
+  def parameter_schema(_domain, resource, action) do
     attributes =
       if action.type in [:action, :read] do
         %{}
