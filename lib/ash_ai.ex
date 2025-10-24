@@ -316,9 +316,11 @@ defmodule AshAi do
       end
 
     handler = %{
-      on_llm_new_delta: fn _model, data ->
+      on_llm_new_delta: fn _chain, deltas ->
         # we received a piece of data
-        IO.write(data.content)
+        for delta <- deltas do
+          IO.write(LangChain.MessageDelta.content_to_string(delta))
+        end
       end,
       on_message_processed: fn _chain, _data ->
         # the message was assembled and is processed

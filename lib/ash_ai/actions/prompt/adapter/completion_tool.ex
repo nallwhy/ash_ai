@@ -51,6 +51,7 @@ defmodule AshAi.Actions.Prompt.Adapter.CompletionTool do
           "additionalProperties" => false
         },
         strict: true,
+        async: false,
         function: fn arguments, _context ->
           with {:ok, value} <-
                  Ash.Type.cast_input(

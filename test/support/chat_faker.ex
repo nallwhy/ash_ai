@@ -18,7 +18,7 @@ defmodule AshAi.ChatFaker do
     struct(__MODULE__, attrs)
   end
 
-  @impl true
+  @impl LangChain.ChatModels.ChatModel
   def call(%__MODULE__{expect_fun: expect_fun} = chat_model, messages, tools)
       when is_list(messages) and is_list(tools) do
     case expect_fun do
@@ -30,13 +30,16 @@ defmodule AshAi.ChatFaker do
     end
   end
 
-  @impl true
+  @impl LangChain.ChatModels.ChatModel
   def restore_from_map(_data) do
     raise "Not implemented"
   end
 
-  @impl true
+  @impl LangChain.ChatModels.ChatModel
   def serialize_config(_model) do
     raise "Not implemented"
   end
+
+  @impl LangChain.ChatModels.ChatModel
+  def retry_on_fallback?(_), do: false
 end
