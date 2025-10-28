@@ -11,6 +11,23 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.3.0](https://github.com/ash-project/ash_ai/compare/v0.2.14...v0.3.0) (2025-10-28)
+
+
+
+
+### Features:
+
+* langchain 0.4 (#132) by [@barnabasJ](https://github.com/barnabasJ) [(#132)](https://github.com/ash-project/ash_ai/pull/132)
+
+### Bug Fixes:
+
+* turn content into string for chat title by [@barnabasJ](https://github.com/barnabasJ) [(#132)](https://github.com/ash-project/ash_ai/pull/132)
+
+### Improvements:
+
+* update ash_oban to 0.5 by [@zachdaniel](https://github.com/zachdaniel)
+
 ## [v0.2.14](https://github.com/ash-project/ash_ai/compare/v0.2.13...v0.2.14) (2025-10-16)
 
 
