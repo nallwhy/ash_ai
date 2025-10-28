@@ -156,7 +156,7 @@ defmodule AshAi.MixProject do
       {:open_api_spex, "~> 3.0"},
       {:langchain, "~> 0.4"},
       {:ash_postgres, "~> 2.5", optional: true},
-      {:ash_oban, "~> 0.4.3", optional: true},
+      {:ash_oban, "~> 0.5", optional: true},
       {:ash_phoenix, "~> 2.0", optional: true},
       {:igniter, "~> 0.5", optional: true},
       {:plug, "~> 1.17", optional: true},
