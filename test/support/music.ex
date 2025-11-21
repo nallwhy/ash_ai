@@ -8,6 +8,10 @@ defmodule AshAi.Test.Music do
 
   tools do
     tool :list_artists, AshAi.Test.Music.ArtistAfterAction, :read
+    tool :create_artist_after, AshAi.Test.Music.ArtistAfterAction, :create
+    tool :update_artist_after, AshAi.Test.Music.ArtistAfterAction, :update
+    tool :create_artist_manual, AshAi.Test.Music.ArtistManual, :create
+    tool :update_artist_manual, AshAi.Test.Music.ArtistManual, :update
   end
 
   mcp_resources do
