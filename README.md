@@ -78,7 +78,6 @@ However, as of the writing of this guide, it requires setting a previous protoco
 #### Roadmap
 
 - Implement OAuth2 flow with AshAuthentication (long term)
-- Implement support for more than just tools, i.e resources etc.
 - Implement sessions, and provide a session id context to tools (this code is just commented out, and can be uncommented, just needs timeout logic for inactive sesions)
 
 #### Installation
@@ -185,6 +184,34 @@ end
 
 Expose these actions as tools. When you call `AshAi.setup_ash_ai(chain, opts)`, or `AshAi.iex_chat/2`
 it will add those as tool calls to the agent.
+
+## Expose content as MCP resources
+
+MCP resources provide LLMs with access to static or dynamic content like UI components, data files, or images. Unlike tools which perform actions, resources return content that the LLM can read and reference.
+
+```elixir
+defmodule MyApp.Blog do
+  use Ash.Domain, extensions: [AshAi]
+
+  mcp_resources do
+    # Return HTML UI for a post
+    # Description is inherited from the :render_card action
+    mcp_resource :post_card, "file://ui/post_card.html", Post, :render_card do
+      mime_type "text/html"
+    end
+
+    # Return JSON data with custom description
+    mcp_resource :post_metadata, "file://data/post.json", Post, :metadata do
+      description "Metadata about the post including author and tags",
+      mime_type "application/json"
+    end
+  end
+end
+```
+
+Resources are exposed via the MCP server at `/mcp` and can be accessed by MCP-compatible clients. The action is called when the resource is read, and its return value is sent to the LLM.
+
+**Description Behavior**: Resource descriptions default to the action's description. You can override this by providing a `description` option in the DSL, which takes precedence.
 
 ### Tool Data Access
 

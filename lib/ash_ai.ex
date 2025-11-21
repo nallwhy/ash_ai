@@ -14,77 +14,13 @@ defmodule AshAi do
   require Logger
   require Ash.Expr
 
-  defmodule FullText do
-    @moduledoc "A section that defines how complex vectorized columns are defined"
-    defstruct [
-      :used_attributes,
-      :text,
-      :__identifier__,
-      name: :full_text_vector,
-      __spark_metadata__: nil
-    ]
-  end
+  alias AshAi.{ToolEndEvent, ToolStartEvent}
 
-  @full_text %Spark.Dsl.Entity{
-    name: :full_text,
-    imports: [Ash.Expr],
-    target: FullText,
-    identifier: :name,
-    schema: [
-      name: [
-        type: :atom,
-        default: :full_text_vector,
-        doc: "The name of the attribute to store the text vector in"
-      ],
-      used_attributes: [
-        type: {:list, :atom},
-        doc: "If set, a vector is only regenerated when these attributes are changed"
-      ],
-      text: [
-        type: {:fun, 1},
-        required: true,
-        doc:
-          "A function or expr that takes a list of records and computes a full text string that will be vectorized. If given an expr, use `atomic_ref` to refer to new values, as this is set as an atomic update."
-      ]
-    ]
-  }
-
-  @vectorize %Spark.Dsl.Section{
-    name: :vectorize,
-    entities: [
-      @full_text
-    ],
-    schema: [
-      attributes: [
-        type: :keyword_list,
-        doc:
-          "A keyword list of attributes to vectorize, and the name of the attribute to store the vector in",
-        default: []
-      ],
-      strategy: [
-        type: {:one_of, [:after_action, :manual, :ash_oban, :ash_oban_manual]},
-        default: :after_action,
-        doc:
-          "How to compute the vector. Currently supported strategies are `:after_action`, `:manual`, and `:ash_oban`."
-      ],
-      define_update_action_for_manual_strategy?: [
-        type: :boolean,
-        default: true,
-        doc:
-          "If true, an `ash_ai_update_embeddings` update action will be defined, which will automatically update the embeddings when run."
-      ],
-      ash_oban_trigger_name: [
-        type: :atom,
-        default: :ash_ai_update_embeddings,
-        doc:
-          "The name of the AshOban-trigger that will be run in order to update the record's embeddings. Defaults to `:ash_ai_update_embeddings`."
-      ],
-      embedding_model: [
-        type: {:spark_behaviour, AshAi.EmbeddingModel},
-        required: true
-      ]
-    ]
-  }
+  use Spark.Dsl.Extension,
+    sections: AshAi.Dsl.sections(),
+    imports: [AshAi.Actions],
+    transformers: [AshAi.Transformers.Vectorize],
+    verifiers: [AshAi.Verifiers.McpResourceActionsReturnString]
 
   defmodule Tool do
     @moduledoc "An action exposed to LLM agents"
@@ -102,90 +38,76 @@ defmodule AshAi do
     ]
   end
 
-  defmodule ToolStartEvent do
+  defmodule McpResource do
     @moduledoc """
-    Event data passed to the `on_tool_start` callback passed to `AshAi.setup_ash_ai/2`.
+    An MCP resource to expose via the Model Context Protocol (MCP).
 
-    Contains information about the tool execution that is about to begin.
+    MCP resources provide LLMs with access to static or dynamic content like UI components,
+    data files, or images. Unlike tools which perform actions, resources return content that
+    the LLM can read and reference.
+
+    ## Example
+
+    ```elixir
+    defmodule MyApp.Blog do
+      use Ash.Domain, extensions: [AshAi]
+
+      mcp_resources do
+        # Description inherited from :render_card action
+        mcp_resource :post_card, "file://ui/post_card.html", Post, :render_card,
+          mime_type: "text/html"
+
+        # Custom description overrides action description
+        mcp_resource :post_data, "file://data/post.json", Post, :to_json,
+          description: "JSON metadata including author, tags, and timestamps",
+          mime_type: "application/json"
+      end
+    end
+    ```
+
+    The action is called when an MCP client requests the resource, and its return value
+    (which must be a string) is sent to the client with the specified MIME type.
+
+    ## Description Behavior
+
+    Resource descriptions default to the action's description. You can provide a custom
+    `description` option in the DSL which takes precedence over the action description.
+    This helps LLMs understand when to use each resource.
     """
     @type t :: %__MODULE__{
-            tool_name: String.t(),
-            action: atom(),
-            resource: module(),
-            arguments: map(),
-            actor: any() | nil,
-            tenant: any() | nil
+            name: atom(),
+            resource: Ash.Resource.t(),
+            action: atom() | Ash.Resource.Actions.Action.t(),
+            domain: module() | nil,
+            title: String.t(),
+            description: String.t(),
+            uri: String.t(),
+            mime_type: String.t()
           }
 
-    defstruct [:tool_name, :action, :resource, :arguments, :actor, :tenant]
-  end
-
-  defmodule ToolEndEvent do
-    @moduledoc """
-    Event data passed to the `on_tool_end` callback passed to `AshAi.setup_ash_ai/2`.
-
-    Contains the tool name and execution result.
-    """
-    @type t :: %__MODULE__{
-            tool_name: String.t(),
-            result: {:ok, String.t(), any()} | {:error, String.t()}
-          }
-
-    defstruct [:tool_name, :result]
-  end
-
-  @tool %Spark.Dsl.Entity{
-    name: :tool,
-    target: Tool,
-    describe: """
-    Expose an Ash action as a tool that can be called by LLMs.
-
-    Tools allow LLMs to interact with your application by calling specific actions on resources.
-    Only public attributes can be used for filtering, sorting, and aggregation, but the `load`
-    option allows including private attributes in the response data.
-    """,
-    schema: [
-      name: [type: :atom, required: true],
-      resource: [type: {:spark, Ash.Resource}, required: true],
-      action: [type: :atom, required: true],
-      action_parameters: [
-        type: {:list, :atom},
-        required: false,
-        doc:
-          "A list of action specific parameters to allow for the underlying action. Only relevant for reads, and defaults to allowing `[:sort, :offset, :limit, :result_type, :filter]`"
-      ],
-      load: [
-        type: :any,
-        default: [],
-        doc:
-          "A list of relationships and calculations to load on the returned records. Note that loaded fields can include private attributes, which will then be included in the tool's response. However, private attributes cannot be used for filtering, sorting, or aggregation."
-      ],
-      async: [type: :boolean, default: true],
-      description: [
-        type: :string,
-        doc: "A description for the tool. Defaults to the action's description."
-      ],
-      identity: [
-        type: :atom,
-        default: nil,
-        doc:
-          "The identity to use for update/destroy actions. Defaults to the primary key. Set to `false` to disable entirely."
-      ]
-    ],
-    args: [:name, :resource, :action]
-  }
-
-  @tools %Spark.Dsl.Section{
-    name: :tools,
-    entities: [
-      @tool
+    defstruct [
+      :name,
+      :resource,
+      :action,
+      :domain,
+      :title,
+      :description,
+      :uri,
+      :mime_type,
+      __spark_metadata__: nil
     ]
-  }
+  end
 
-  use Spark.Dsl.Extension,
-    sections: [@tools, @vectorize],
-    imports: [AshAi.Actions],
-    transformers: [AshAi.Transformers.Vectorize]
+  defmodule FullText do
+    @moduledoc "A section that defines how complex vectorized columns are defined"
+    defstruct [
+      :used_attributes,
+      :text,
+      :__identifier__,
+      name: :full_text_vector,
+      __spark_metadata__: nil
+    ]
+  end
 
   defmodule Options do
     @moduledoc false
@@ -203,6 +125,12 @@ defmodule AshAi do
           type: {:wrap_list, :atom},
           doc: """
            A list of tool names. If not set. Defaults to everything. If `actions` is also set, both are applied as filters.
+          """
+        ],
+        mcp_resources: [
+          type: {:or, [{:wrap_list, :atom}, {:literal, :*}]},
+          doc: """
+          A list of MCP resource names to expose, or `:*` for all. If not set, defaults to everything.
           """
         ],
         exclude_actions: [
@@ -451,7 +379,7 @@ defmodule AshAi do
     |> Jason.decode!()
   end
 
-  defp function(%Tool{
+  defp function(%AshAi.Tool{
          name: name,
          domain: domain,
          resource: resource,
@@ -754,7 +682,7 @@ defmodule AshAi do
               {:error,
                domain
                |> AshJsonApi.Error.to_json_api_errors(resource, error, action.type)
-               |> serialize_errors()
+               |> AshAi.Serializer.serialize_errors()
                |> Jason.encode!()}
           end
 
@@ -905,22 +833,6 @@ defmodule AshAi do
   def class_to_status(:invalid), do: 400
   def class_to_status(_), do: 500
 
-  defp serialize_errors(errors) do
-    errors
-    |> List.wrap()
-    |> Enum.map(fn error ->
-      %{}
-      |> add_if_defined(:id, error.id)
-      |> add_if_defined(:status, to_string(error.status_code))
-      |> add_if_defined(:code, error.code)
-      |> add_if_defined(:title, error.title)
-      |> add_if_defined(:detail, error.detail)
-      |> add_if_defined([:source, :pointer], error.source_pointer)
-      |> add_if_defined([:source, :parameter], error.source_parameter)
-      |> add_if_defined(:meta, parse_error(error.meta))
-    end)
-  end
-
   def with_source_pointer(%{source_pointer: source_pointer} = built_error, _)
       when source_pointer not in [nil, :undefined] do
     [built_error]
@@ -947,26 +859,6 @@ defmodule AshAi do
   defp source_pointer(field, path) do
     "/input/#{Enum.join(List.wrap(path) ++ [field], "/")}"
   end
-
-  defp add_if_defined(params, _, :undefined) do
-    params
-  end
-
-  defp add_if_defined(params, [key1, key2], value) do
-    params
-    |> Map.put_new(key1, %{})
-    |> Map.update!(key1, &Map.put(&1, key2, value))
-  end
-
-  defp add_if_defined(params, key, value) do
-    Map.put(params, key, value)
-  end
-
-  defp parse_error(%{match: %Regex{} = match} = error) do
-    %{error | match: Regex.source(match)}
-  end
-
-  defp parse_error(error), do: error
 
   defp add_action_specific_properties(
          properties,
@@ -1150,6 +1042,90 @@ defmodule AshAi do
   end
 
   @doc false
+
+  def exposed_mcp_resources(opts) when is_list(opts) do
+    exposed_mcp_resources(Options.validate!(opts))
+  end
+
+  def exposed_mcp_resources(opts) do
+    if !opts.otp_app and !opts.actions do
+      raise "Must specify `otp_app` if you do not specify `actions`"
+    end
+
+    domains =
+      if opts.actions do
+        opts.actions
+        |> Enum.map(fn {resource, _actions} ->
+          domain = Ash.Resource.Info.domain(resource)
+
+          if !domain do
+            raise "Cannot use an ash resource that does not have a domain"
+          end
+
+          domain
+        end)
+        |> Enum.uniq()
+      else
+        Application.get_env(opts.otp_app, :ash_domains) || []
+      end
+
+    domains
+    |> Enum.flat_map(fn domain ->
+      domain
+      |> AshAi.Info.mcp_resources()
+      |> Enum.filter(fn mcp_resource ->
+        valid_mcp_resource(mcp_resource, opts.mcp_resources, opts.actions, opts.exclude_actions)
+      end)
+      |> Enum.map(fn mcp_resource ->
+        action = Ash.Resource.Info.action(mcp_resource.resource, mcp_resource.action)
+
+        %{
+          mcp_resource
+          | domain: domain,
+            action: action,
+            description: mcp_resource.description || action.description
+        }
+      end)
+    end)
+  end
+
+  defp valid_mcp_resource(mcp_resource, allowed_mcp_resources, allowed_actions, exclude_actions) do
+    # If mcp_resources filter is specified (including empty list), check membership
+    passes_mcp_resources_filter =
+      case allowed_mcp_resources do
+        [:*] -> true
+        :* -> true
+        nil -> true
+        [] -> false
+        list when is_list(list) -> Enum.member?(list, mcp_resource.name)
+      end
+
+    # Check if actions filter is specified
+    passes_actions_filter =
+      if allowed_actions && allowed_actions != [] do
+        Enum.any?(allowed_actions, fn
+          {resource, :*} ->
+            mcp_resource.resource == resource
+
+          {resource, actions} when is_list(actions) ->
+            mcp_resource.resource == resource && mcp_resource.action in actions
+        end)
+      else
+        true
+      end
+
+    # Check if this is in the exclude list
+    is_excluded =
+      if exclude_actions && exclude_actions != [] do
+        Enum.any?(exclude_actions, fn {resource, action} ->
+          mcp_resource.resource == resource && mcp_resource.action == action
+        end)
+      else
+        false
+      end
+
+    passes_mcp_resources_filter && passes_actions_filter && !is_excluded
+  end
 
   def exposed_tools(opts) when is_list(opts) do
     exposed_tools(Options.validate!(opts))

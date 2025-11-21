@@ -14,9 +14,13 @@ spark_locals_without_parens = [
   full_text: 1,
   identity: 1,
   load: 1,
+  mcp_resource: 4,
+  mcp_resource: 5,
+  mime_type: 1,
   name: 1,
   strategy: 1,
   text: 1,
+  title: 1,
   tool: 3,
   tool: 4,
   used_attributes: 1
