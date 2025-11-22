@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 spark_locals_without_parens = [
+  _meta: 1,
   action_parameters: 1,
   ash_oban_trigger_name: 1,
   async: 1,

@@ -17,14 +17,20 @@ defmodule AshAi.ExposedToolsTest do
   describe "tools filtering" do
     test "tools: nil returns all tools (default)" do
       tools = AshAi.exposed_tools(@opts)
-      assert length(tools) == 5
+      assert length(tools) == 6
     end
 
     test "tools: specific list filters to only those tools" do
       opts = Keyword.put(@opts, :tools, [:list_artists, :create_artist_after])
 
-      assert [%{name: name1}, %{name: name2}] = AshAi.exposed_tools(opts)
-      assert MapSet.new([name1, name2]) == MapSet.new([:list_artists, :create_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([
+                 :list_artists,
+                 :create_artist_after
+               ])
     end
 
     test "tools: single tool in list" do
@@ -44,17 +50,30 @@ defmodule AshAi.ExposedToolsTest do
     test "actions: specific list filters resource/action pairs" do
       opts = Keyword.put(@opts, :actions, [{Music.ArtistAfterAction, [:read, :create]}])
 
-      assert [%{name: name1}, %{name: name2}] = AshAi.exposed_tools(opts)
-      assert MapSet.new([name1, name2]) == MapSet.new([:list_artists, :create_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([
+                 :list_artists,
+                 :create_artist_after,
+                 :list_artists_with_meta
+               ])
     end
 
     test "actions: wildcard returns all actions for resource" do
       opts = Keyword.put(@opts, :actions, [{Music.ArtistAfterAction, :*}])
 
-      assert [%{name: name1}, %{name: name2}, %{name: name3}] = AshAi.exposed_tools(opts)
-
-      assert MapSet.new([name1, name2, name3]) ==
-               MapSet.new([:list_artists, :create_artist_after, :update_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([
+                 :list_artists,
+                 :create_artist_after,
+                 :update_artist_after,
+                 :list_artists_with_meta
+               ])
     end
 
     test "actions: multiple resources" do
@@ -64,8 +83,15 @@ defmodule AshAi.ExposedToolsTest do
           {Music.ArtistManual, [:create]}
         ])
 
-      assert [%{name: name1}, %{name: name2}] = AshAi.exposed_tools(opts)
-      assert MapSet.new([name1, name2]) == MapSet.new([:list_artists, :create_artist_manual])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([
+                 :list_artists,
+                 :create_artist_manual,
+                 :list_artists_with_meta
+               ])
     end
 
     test "actions: raises when action not exposed as tool" do
@@ -80,10 +106,7 @@ defmodule AshAi.ExposedToolsTest do
       opts = Keyword.put(@opts, :exclude_actions, [{Music.ArtistAfterAction, :create}])
       tools = AshAi.exposed_tools(opts)
 
-      # Should return 4 tools (all 5 except create_artist_after)
-      assert length(tools) == 4
-      tool_names = Enum.map(tools, & &1.name)
-      refute :create_artist_after in tool_names
+      refute :create_artist_after in Enum.map(tools, & &1.name)
     end
 
     test "exclude_actions: multiple exclusions" do
@@ -93,10 +116,16 @@ defmodule AshAi.ExposedToolsTest do
           {Music.ArtistManual, :update}
         ])
 
-      assert [%{name: name1}, %{name: name2}, %{name: name3}] = AshAi.exposed_tools(opts)
-
-      assert MapSet.new([name1, name2, name3]) ==
-               MapSet.new([:list_artists, :create_artist_manual, :update_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([
+                 :list_artists,
+                 :create_artist_manual,
+                 :update_artist_after,
+                 :list_artists_with_meta
+               ])
     end
   end
 
@@ -107,8 +136,11 @@ defmodule AshAi.ExposedToolsTest do
         |> Keyword.put(:tools, [:list_artists, :create_artist_after, :create_artist_manual])
         |> Keyword.put(:actions, [{Music.ArtistAfterAction, [:read, :create]}])
 
-      assert [%{name: name1}, %{name: name2}] = AshAi.exposed_tools(opts)
-      assert MapSet.new([name1, name2]) == MapSet.new([:list_artists, :create_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([:list_artists, :create_artist_after])
     end
 
     test "tools + exclude_actions: exclusion applied after tools filter" do
@@ -117,8 +149,10 @@ defmodule AshAi.ExposedToolsTest do
         |> Keyword.put(:tools, [:list_artists, :create_artist_after, :update_artist_after])
         |> Keyword.put(:exclude_actions, [{Music.ArtistAfterAction, :create}])
 
-      assert [%{name: name1}, %{name: name2}] = AshAi.exposed_tools(opts)
-      assert MapSet.new([name1, name2]) == MapSet.new([:list_artists, :update_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() == MapSet.new([:list_artists, :update_artist_after])
     end
 
     test "all filters work together: actions + tools + exclude_actions" do
@@ -128,8 +162,11 @@ defmodule AshAi.ExposedToolsTest do
         |> Keyword.put(:tools, [:list_artists, :create_artist_after, :update_artist_after])
         |> Keyword.put(:exclude_actions, [{Music.ArtistAfterAction, :create}])
 
-      assert [%{name: name1}, %{name: name2}] = AshAi.exposed_tools(opts)
-      assert MapSet.new([name1, name2]) == MapSet.new([:list_artists, :update_artist_after])
+      assert opts
+             |> AshAi.exposed_tools()
+             |> Enum.map(& &1.name)
+             |> MapSet.new() ==
+               MapSet.new([:list_artists, :update_artist_after])
     end
   end
 

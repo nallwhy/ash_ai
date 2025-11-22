@@ -12,6 +12,16 @@ defmodule AshAi.Test.Music do
     tool :update_artist_after, AshAi.Test.Music.ArtistAfterAction, :update
     tool :create_artist_manual, AshAi.Test.Music.ArtistManual, :create
     tool :update_artist_manual, AshAi.Test.Music.ArtistManual, :update
+
+    tool :list_artists_with_meta,
+         AshAi.Test.Music.ArtistAfterAction,
+         :read,
+         description: "Read artists with OpenAI metadata",
+         _meta: %{
+           "openai/outputTemplate" => "ui://widget/artists-list.html",
+           "openai/toolInvocation/invoking" => "Loading artists…",
+           "openai/toolInvocation/invoked" => "Artists loaded."
+         }
   end
 
   mcp_resources do

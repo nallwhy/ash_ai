@@ -31,6 +31,23 @@ option allows including private attributes in the response data.
 
 
 
+### Examples
+```
+tool :list_artists, Artist, :read
+```
+
+```
+tool :create_artist, Artist, :create, description: "Create a new artist"
+```
+
+```
+tool :update_artist, Artist, :update, identity: :id, load: [:albums]
+```
+
+```
+tool :get_board, Board, :read, _meta: %{"openai/outputTemplate" => "ui://widget/kanban-board.html", "openai/toolInvocation/invoking" => "Preparing the board…", "openai/toolInvocation/invoked" => "Board ready."}
+```
+
 
 
 ### Arguments
@@ -49,6 +66,7 @@ option allows including private attributes in the response data.
 | [`async`](#tools-tool-async){: #tools-tool-async } | `boolean` | `true` |  |
 | [`description`](#tools-tool-description){: #tools-tool-description } | `String.t` |  | A description for the tool. Defaults to the action's description. |
 | [`identity`](#tools-tool-identity){: #tools-tool-identity } | `atom` |  | The identity to use for update/destroy actions. Defaults to the primary key. Set to `false` to disable entirely. |
+| [`_meta`](#tools-tool-_meta){: #tools-tool-_meta } | `any` | `%{}` | Optional metadata map for tool integrations. Supports provider-specific extensions like OpenAI metadata. Keys and values should be strings to comply with JSON-RPC serialization. |
 
 
 

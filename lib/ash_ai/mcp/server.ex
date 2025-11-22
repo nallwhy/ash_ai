@@ -11,6 +11,8 @@ defmodule AshAi.Mcp.Server do
   It also handles the core JSON-RPC message processing for the protocol.
   """
 
+  alias AshAi.Tool
+
   @doc """
   Process an HTTP POST request containing JSON-RPC messages
   """
@@ -309,13 +311,27 @@ defmodule AshAi.Mcp.Server do
       %{"method" => "tools/list", "id" => id} ->
         tools =
           opts
+          |> Keyword.take([:otp_app, :tools, :actor, :context, :tenant, :actions])
+          |> Keyword.update(
+            :context,
+            %{otp_app: opts[:otp_app]},
+            &Map.put(&1, :otp_app, opts[:otp_app])
+          )
           |> tools()
-          |> Enum.map(fn function ->
-            %{
+          |> Enum.map(fn %Tool{} = tool ->
+            function = AshAi.Tools.to_function(tool)
+
+            result = %{
               "name" => function.name,
               "description" => function.description,
               "inputSchema" => function.parameters_schema
             }
+
+            if Tool.has_meta?(tool) do
+              Map.put(result, "_meta", tool._meta)
+            else
+              result
+            end
           end)
 
         response = %{
@@ -332,19 +348,29 @@ defmodule AshAi.Mcp.Server do
         tool_name = params["name"]
         tool_args = params["arguments"] || %{}
 
-        opts =
-          opts
-          |> Keyword.update(
-            :context,
-            %{mcp_session_id: session_id},
-            &Map.put(&1, :mcp_session_id, session_id)
-          )
-          |> Keyword.put(:filter, fn tool -> tool.mcp == :tool end)
+        with %Tool{} = tool <- find_tool_by_name(tool_name, session_id, opts),
+             context = tool_context(opts),
+             {:ok, result, _} <- AshAi.Tools.execute(tool, tool_args, context) do
+          result = %{
+            "isError" => false,
+            "content" => [%{"type" => "text", "text" => result}]
+          }
 
-        opts
-        |> tools()
-        |> Enum.find(&(&1.name == tool_name))
-        |> case do
+          result =
+            if Tool.has_meta?(tool) do
+              Map.put(result, "_meta", tool._meta)
+            else
+              result
+            end
+
+          response = %{
+            "jsonrpc" => "2.0",
+            "id" => id,
+            "result" => result
+          }
+
+          {:json_response, Jason.encode!(response), session_id}
+        else
           nil ->
             response = %{
               "jsonrpc" => "2.0",
@@ -357,43 +383,18 @@ defmodule AshAi.Mcp.Server do
 
             {:json_response, Jason.encode!(response), session_id}
 
-          tool ->
-            context =
-              opts
-              |> Keyword.take([:actor, :tenant, :context])
-              |> Map.new()
-              |> Map.update(
-                :context,
-                %{otp_app: opts[:otp_app]},
-                &Map.put(&1, :otp_app, opts[:otp_app])
-              )
+          {:error, error} ->
+            response = %{
+              "jsonrpc" => "2.0",
+              "id" => id,
+              "error" => %{
+                "code" => -32_000,
+                "message" => "Tool execution failed",
+                "data" => %{"error" => error}
+              }
+            }
 
-            case tool.function.(tool_args, context) do
-              {:ok, result, _} ->
-                response = %{
-                  "jsonrpc" => "2.0",
-                  "id" => id,
-                  "result" => %{
-                    "isError" => false,
-                    "content" => [%{"type" => "text", "text" => result}]
-                  }
-                }
-
-                {:json_response, Jason.encode!(response), session_id}
-
-              {:error, error} ->
-                response = %{
-                  "jsonrpc" => "2.0",
-                  "id" => id,
-                  "error" => %{
-                    "code" => -32_000,
-                    "message" => "Tool execution failed",
-                    "data" => %{"error" => error}
-                  }
-                }
-
-                {:json_response, Jason.encode!(response), session_id}
-            end
+            {:json_response, Jason.encode!(response), session_id}
         end
 
       %{"method" => method, "id" => id, "params" => _params} ->
@@ -454,6 +455,34 @@ defmodule AshAi.Mcp.Server do
     opts
     |> mcp_resources()
     |> Enum.find(&(&1.uri == uri))
+  end
+
+  defp find_tool_by_name(tool_name, session_id, opts) do
+    opts
+    |> Keyword.take([:otp_app, :tools, :actor, :context, :tenant, :actions])
+    |> Keyword.update(
+      :context,
+      %{mcp_session_id: session_id},
+      &Map.put(&1, :mcp_session_id, session_id)
+    )
+    |> Keyword.update(
+      :context,
+      %{otp_app: opts[:otp_app]},
+      &Map.put(&1, :otp_app, opts[:otp_app])
+    )
+    |> tools()
+    |> Enum.find(&(to_string(&1.name) == tool_name))
+  end
+
+  defp tool_context(opts) do
+    opts
+    |> Keyword.take([:actor, :tenant, :context])
+    |> Map.new()
+    |> Map.update(
+      :context,
+      %{otp_app: opts[:otp_app]},
+      &Map.put(&1, :otp_app, opts[:otp_app])
+    )
   end
 
   defp run_mcp_resource_action(
@@ -525,7 +554,7 @@ defmodule AshAi.Mcp.Server do
       %{otp_app: opts[:otp_app]},
       &Map.put(&1, :otp_app, opts[:otp_app])
     )
-    |> AshAi.functions()
+    |> AshAi.exposed_tools()
   end
 
   @doc """

@@ -38,6 +38,12 @@ defmodule AshAi.Dsl do
       default: nil,
       doc:
         "The identity to use for update/destroy actions. Defaults to the primary key. Set to `false` to disable entirely."
+    ],
+    _meta: [
+      type: :any,
+      default: %{},
+      doc:
+        "Optional metadata map for tool integrations. Supports provider-specific extensions like OpenAI metadata. Keys and values should be strings to comply with JSON-RPC serialization."
     ]
   ]
 
@@ -139,6 +145,12 @@ defmodule AshAi.Dsl do
     Only public attributes can be used for filtering, sorting, and aggregation, but the `load`
     option allows including private attributes in the response data.
     """,
+    examples: [
+      ~s(tool :list_artists, Artist, :read),
+      ~s(tool :create_artist, Artist, :create, description: "Create a new artist"),
+      ~s(tool :update_artist, Artist, :update, identity: :id, load: [:albums]),
+      ~s|tool :get_board, Board, :read, _meta: %{"openai/outputTemplate" => "ui://widget/kanban-board.html", "openai/toolInvocation/invoking" => "Preparing the board…", "openai/toolInvocation/invoked" => "Board ready."}|
+    ],
     target: AshAi.Tool,
     schema: @tool_schema,
     args: [:name, :resource, :action]

@@ -40,6 +40,16 @@ defmodule AshAi.ToolTest do
 
     tools do
       tool :read_test_resources, TestResource, :read, load: [:internal_status]
+
+      tool :read_test_resources_with_meta,
+           TestResource,
+           :read,
+           description: "Read test resources with metadata",
+           _meta: %{
+             "openai/outputTemplate" => "ui://widget/test-resources.html",
+             "openai/toolInvocation/invoking" => "Loading test resources…",
+             "openai/toolInvocation/invoked" => "Test resources loaded."
+           }
     end
   end
 
@@ -169,6 +179,52 @@ defmodule AshAi.ToolTest do
       # Private attributes are not present
       refute "private_notes" in aggregate_field_enum
       refute "internal_status" in aggregate_field_enum
+    end
+  end
+
+  describe "tool _meta field" do
+    test "tool without _meta has has_meta?/1 return false" do
+      tools = AshAi.Info.tools(TestDomain)
+      tool_without_meta = Enum.find(tools, &(&1.name == :read_test_resources))
+
+      refute AshAi.Tool.has_meta?(tool_without_meta)
+    end
+
+    test "tool with _meta has has_meta?/1 return true" do
+      tools = AshAi.Info.tools(TestDomain)
+      tool_with_meta = Enum.find(tools, &(&1.name == :read_test_resources_with_meta))
+
+      assert AshAi.Tool.has_meta?(tool_with_meta)
+    end
+
+    test "tool with _meta contains the correct metadata" do
+      tools = AshAi.Info.tools(TestDomain)
+      tool_with_meta = Enum.find(tools, &(&1.name == :read_test_resources_with_meta))
+
+      assert tool_with_meta._meta == %{
+               "openai/outputTemplate" => "ui://widget/test-resources.html",
+               "openai/toolInvocation/invoking" => "Loading test resources…",
+               "openai/toolInvocation/invoked" => "Test resources loaded."
+             }
+    end
+
+    test "tool without _meta has _meta field as empty map or nil" do
+      tools = AshAi.Info.tools(TestDomain)
+      tool_without_meta = Enum.find(tools, &(&1.name == :read_test_resources))
+
+      assert tool_without_meta._meta == %{} or is_nil(tool_without_meta._meta)
+    end
+
+    test "tool with empty _meta has has_meta?/1 return false" do
+      tool_with_empty_meta = %AshAi.Tool{_meta: %{}}
+
+      refute AshAi.Tool.has_meta?(tool_with_empty_meta)
+    end
+
+    test "tool with nil _meta has has_meta?/1 return false" do
+      tool_with_nil_meta = %AshAi.Tool{_meta: nil}
+
+      refute AshAi.Tool.has_meta?(tool_with_nil_meta)
     end
   end
 
