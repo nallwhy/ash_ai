@@ -58,7 +58,7 @@ if Code.ensure_loaded?(Igniter) do
 
       chat =
         if igniter.args.options[:domain] do
-          Igniter.Project.Module.parse(igniter.arg.options[:domain])
+          Igniter.Project.Module.parse(igniter.args.options[:domain])
         else
           Igniter.Project.Module.module_name(igniter, "Chat")
         end
