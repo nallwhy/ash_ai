@@ -17,12 +17,13 @@ defmodule AshAi.Tools do
   def to_function(
         %Tool{
           name: name,
-          domain: domain,
+          domain: _domain,
           resource: resource,
           action: action,
           async: async,
           description: description,
-          action_parameters: action_parameters
+          action_parameters: _action_parameters,
+          arguments: _tool_arguments
         } = tool
       ) do
     name = to_string(name)
@@ -33,7 +34,7 @@ defmodule AshAi.Tools do
           "Call the #{action.name} action on the #{inspect(resource)} resource"
       )
 
-    parameter_schema = parameter_schema(domain, resource, action, action_parameters)
+    parameter_schema = parameter_schema(tool)
 
     LangChain.Function.new!(%{
       name: name,
@@ -52,18 +53,21 @@ defmodule AshAi.Tools do
           resource: resource,
           action: action,
           load: load,
-          identity: identity
+          identity: identity,
+          arguments: tool_arguments
         },
-        arguments,
+        client_arguments,
         context
       ) do
     tool_name = to_string(name)
     # Handle nil arguments from LangChain/MCP clients
-    arguments = arguments || %{}
+    arguments = client_arguments || %{}
 
     actor = context[:actor]
     tenant = context[:tenant]
-    input = arguments["input"] || %{}
+
+    client_input = arguments["input"] || %{}
+
     opts = [domain: domain, actor: actor, tenant: tenant, context: context[:context] || %{}]
 
     callbacks = context[:tool_callbacks] || %{}
@@ -81,6 +85,16 @@ defmodule AshAi.Tools do
 
     result =
       try do
+        validate_inputs!(resource, client_input, action, tool_arguments)
+        input = Map.take(client_input, valid_action_inputs(resource, action))
+
+        resolved_load =
+          case load do
+            func when is_function(func, 1) -> func.(client_input)
+            list when is_list(list) -> list
+            _ -> []
+          end
+
         case action.type do
           :read ->
             sort =
@@ -142,7 +156,7 @@ defmodule AshAi.Tools do
               case result_type do
                 "run_query" ->
                   query
-                  |> Ash.Actions.Read.unpaginated_read(action, load: load)
+                  |> Ash.Actions.Read.unpaginated_read(action, load: resolved_load)
                   |> case do
                     {:ok, value} ->
                       value
@@ -153,7 +167,7 @@ defmodule AshAi.Tools do
                   |> then(fn result ->
                     result
                     |> AshAi.Serializer.serialize_value({:array, resource}, [], domain,
-                      load: load
+                      load: resolved_load
                     )
                     |> Jason.encode!()
                     |> then(&{:ok, &1, result})
@@ -251,7 +265,7 @@ defmodule AshAi.Tools do
                 return_errors?: true,
                 notify?: true,
                 strategy: [:atomic, :stream, :atomic_batches],
-                load: load,
+                load: resolved_load,
                 allow_stream_with: :full_read,
                 return_records?: true
               )
@@ -259,7 +273,7 @@ defmodule AshAi.Tools do
             |> case do
               %Ash.BulkResult{status: :success, records: [result]} ->
                 result
-                |> AshAi.Serializer.serialize_value(resource, [], domain, load: load)
+                |> AshAi.Serializer.serialize_value(resource, [], domain, load: resolved_load)
                 |> Jason.encode!()
                 |> then(&{:ok, &1, result})
 
@@ -281,7 +295,7 @@ defmodule AshAi.Tools do
               Keyword.merge(opts,
                 return_errors?: true,
                 notify?: true,
-                load: load,
+                load: resolved_load,
                 strategy: [:atomic, :stream, :atomic_batches],
                 allow_stream_with: :full_read,
                 return_records?: true
@@ -290,7 +304,7 @@ defmodule AshAi.Tools do
             |> case do
               %Ash.BulkResult{status: :success, records: [result]} ->
                 result
-                |> AshAi.Serializer.serialize_value(resource, [], domain, load: load)
+                |> AshAi.Serializer.serialize_value(resource, [], domain, load: resolved_load)
                 |> Jason.encode!()
                 |> then(&{:ok, &1, result})
 
@@ -303,10 +317,10 @@ defmodule AshAi.Tools do
           :create ->
             resource
             |> Ash.Changeset.for_create(action.name, input, opts)
-            |> Ash.create!(load: load)
+            |> Ash.create!(load: resolved_load)
             |> then(fn result ->
               result
-              |> AshAi.Serializer.serialize_value(resource, [], domain, load: load)
+              |> AshAi.Serializer.serialize_value(resource, [], domain, load: resolved_load)
               |> Jason.encode!()
               |> then(&{:ok, &1, result})
             end)
@@ -318,7 +332,9 @@ defmodule AshAi.Tools do
             |> then(fn result ->
               if action.returns do
                 result
-                |> AshAi.Serializer.serialize_value(action.returns, [], domain, load: load)
+                |> AshAi.Serializer.serialize_value(action.returns, [], domain,
+                  load: resolved_load
+                )
                 |> Jason.encode!()
               else
                 "success"
@@ -335,6 +351,9 @@ defmodule AshAi.Tools do
            |> AshJsonApi.Error.to_json_api_errors(resource, error, action.type)
            |> serialize_errors()
            |> Jason.encode!()}
+      catch
+        {:tool_error, json_error, context} ->
+          {:ok, json_error, context}
       end
 
     if on_end = callbacks[:on_tool_end] do
@@ -391,7 +410,13 @@ defmodule AshAi.Tools do
     end)
   end
 
-  defp parameter_schema(_domain, resource, action, action_parameters) do
+  defp parameter_schema(%Tool{
+         domain: _domain,
+         resource: resource,
+         action: action,
+         action_parameters: action_parameters,
+         arguments: tool_arguments
+       }) do
     attributes =
       if action.type in [:action, :read] do
         %{}
@@ -425,6 +450,34 @@ defmodule AshAi.Tools do
         )
       end)
 
+    # We iterate over the tool DSL arguments and merge them into the same 'properties' map to maintain a flat list of inputs for the agent.
+    properties =
+      Enum.reduce(tool_arguments, properties, fn argument, props ->
+        # We construct a map that mimics an Ash.Resource.Argument so we can reuse the existing OpenApi the existing OpenApi type conversion logic (Ash Type -> JSON Schema)..
+        tool_argument = %{
+          name: argument.name,
+          type: argument.type,
+          constraints: argument.constraints,
+          allow_nil?: argument.allow_nil?,
+          default: argument.default,
+          description: argument.description
+        }
+
+        Map.put(
+          props,
+          argument.name,
+          AshAi.OpenApi.resource_write_attribute_type(tool_argument, resource, :create)
+        )
+      end)
+
+    required_tool_arguments =
+      tool_arguments
+      |> Enum.filter(&(not &1.allow_nil?))
+      |> Enum.map(& &1.name)
+
+    required_action_arguments =
+      AshAi.OpenApi.required_write_attributes(resource, action.arguments, action)
+
     props_with_input =
       if Enum.empty?(properties) do
         %{}
@@ -434,7 +487,7 @@ defmodule AshAi.Tools do
             type: :object,
             properties: properties,
             additionalProperties: false,
-            required: AshAi.OpenApi.required_write_attributes(resource, action.arguments, action)
+            required: Enum.uniq(required_action_arguments ++ required_tool_arguments)
           }
         }
       end
@@ -650,4 +703,40 @@ defmodule AshAi.Tools do
   end
 
   defp parse_error(error), do: error
+
+  defp validate_inputs!(resource, client_input, action, tool_arguments) do
+    allowed_keys =
+      MapSet.new(
+        valid_action_inputs(resource, action) ++ Enum.map(tool_arguments, &to_string(&1.name))
+      )
+
+    unknown_keys = MapSet.difference(MapSet.new(Map.keys(client_input)), allowed_keys)
+
+    if MapSet.size(unknown_keys) > 0 do
+      error_msg =
+        "Unknown arguments provided: #{Enum.join(unknown_keys, ", ")}. Valid arguments are: #{Enum.join(allowed_keys, ", ")}"
+
+      json_error =
+        %{
+          errors: [
+            %{
+              code: "invalid_argument",
+              detail: error_msg,
+              source: %{pointer: "/input"}
+            }
+          ]
+        }
+        |> Jason.encode!()
+
+      throw({:tool_error, json_error, %{error: error_msg}})
+    else
+      :ok
+    end
+  end
+
+  defp valid_action_inputs(resource, action) do
+    resource
+    |> Ash.Resource.Info.action_inputs(action.name)
+    |> Enum.map(&to_string/1)
+  end
 end

@@ -31,9 +31,25 @@ defmodule AshAi do
       :identity,
       :description,
       :action_parameters,
+      :arguments,
       :_meta,
       __spark_metadata__: nil
     ]
+
+    defmodule Argument do
+      @moduledoc """
+      A struct representing an argument defined in the Tool DSL.
+      """
+      defstruct [
+        :name,
+        :type,
+        :description,
+        :default,
+        constraints: [],
+        allow_nil?: true,
+        __spark_metadata__: nil
+      ]
+    end
 
     def has_meta?(%__MODULE__{_meta: meta})
         when not is_nil(meta) and meta != %{},
