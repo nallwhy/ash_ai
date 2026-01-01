@@ -657,7 +657,7 @@ defmodule AshAi do
       Ash.can?({resource, action}, actor,
         tenant: tenant,
         domain: domain,
-        context: %{private: %{ash_ai?: true}},
+        context: %{private: %{ash_ai_pre_check?: true}},
         maybe_is: true,
         run_queries?: false,
         pre_flight?: false
