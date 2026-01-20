@@ -289,6 +289,14 @@ defmodule AshAi.Actions.Prompt do
             # For non-OpenAI endpoints, use RequestJson
             AshAi.Actions.Prompt.Adapter.RequestJson
 
+          %LangChain.ChatModels.ChatOpenAIResponses{endpoint: "https://api.openai.com" <> _rest} ->
+            AshAi.Actions.Prompt.Adapter.StructuredOutput
+
+          %LangChain.ChatModels.ChatOpenAIResponses{endpoint: endpoint}
+          when not is_nil(endpoint) ->
+            # For non-OpenAI endpoints, use RequestJson
+            AshAi.Actions.Prompt.Adapter.RequestJson
+
           %LangChain.ChatModels.ChatAnthropic{} ->
             AshAi.Actions.Prompt.Adapter.CompletionTool
 

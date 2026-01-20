@@ -11,6 +11,7 @@ defmodule AshAi.Actions.Prompt.Adapter.StructuredOutput do
   @behaviour AshAi.Actions.Prompt.Adapter
 
   alias AshAi.Actions.Prompt.Adapter.Data
+  alias LangChain.ChatModels
   alias LangChain.Chains.LLMChain
   alias LangChain.Message.ContentPart
 
@@ -19,20 +20,7 @@ defmodule AshAi.Actions.Prompt.Adapter.StructuredOutput do
       raise "Only LLMs that have a `json_schema` field can currently be used with the #{inspect(__MODULE__)} adapter"
     end
 
-    llm =
-      Map.merge(data.llm, %{
-        json_schema: %{
-          "strict" => true,
-          "schema" => %{
-            "type" => "object",
-            "properties" => %{"result" => data.json_schema},
-            "required" => ["result"],
-            "additionalProperties" => false
-          },
-          "name" => "result"
-        },
-        json_response: true
-      })
+    llm = process_json_schema(data.llm, data.json_schema)
 
     messages = data.messages
 
@@ -59,6 +47,35 @@ defmodule AshAi.Actions.Prompt.Adapter.StructuredOutput do
       {:error, _, error} ->
         {:error, error}
     end
+  end
+
+  defp process_json_schema(%ChatModels.ChatOpenAI{} = llm, json_schema) do
+    Map.merge(llm, %{
+      json_schema: %{
+        "strict" => true,
+        "schema" => %{
+          "type" => "object",
+          "properties" => %{"result" => json_schema},
+          "required" => ["result"],
+          "additionalProperties" => false
+        },
+        "name" => "result"
+      },
+      json_response: true
+    })
+  end
+
+  defp process_json_schema(%ChatModels.ChatOpenAIResponses{} = llm, json_schema) do
+    Map.merge(llm, %{
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{"result" => json_schema},
+        "required" => ["result"],
+        "additionalProperties" => false
+      },
+      json_schema_name: "result",
+      json_response: true
+    })
   end
 
   defp process_llm_response(content, data) do
