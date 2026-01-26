@@ -11,6 +11,33 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.5.0](https://github.com/ash-project/ash_ai/compare/v0.4.0...v0.5.0) (2026-01-26)
+
+
+
+
+### Features:
+
+* Add ChatOpenAiResponses support (#163) by sezaru [(#163)](https://github.com/ash-project/ash_ai/pull/163)
+
+* Add ChatOpenAiResponses support by sezaru [(#163)](https://github.com/ash-project/ash_ai/pull/163)
+
+* Use StructuredOutput for ChatOpenAiResponses by sezaru [(#163)](https://github.com/ash-project/ash_ai/pull/163)
+
+* Add support for modifying the chain in prompt (#142) by [@Munksgaard](https://github.com/Munksgaard) [(#142)](https://github.com/ash-project/ash_ai/pull/142)
+
+### Bug Fixes:
+
+* add additionalProperties constraint to input schema (#144) by [@kingdomcoding](https://github.com/kingdomcoding) [(#144)](https://github.com/ash-project/ash_ai/pull/144)
+
+* fix issue with AshOban compiling before AshAi action definition (#148) by Aaron Westbrook [(#148)](https://github.com/ash-project/ash_ai/pull/148)
+
+### Improvements:
+
+* Handle anonymous function in tool load definition (#157) by josh-brainbox [(#157)](https://github.com/ash-project/ash_ai/pull/157)
+
+* add arguments to tools by josh-brainbox [(#157)](https://github.com/ash-project/ash_ai/pull/157)
+
 ## [v0.4.0](https://github.com/ash-project/ash_ai/compare/v0.3.0...v0.4.0) (2025-11-23)
 
 
