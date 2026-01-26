@@ -522,9 +522,11 @@ if Code.ensure_loaded?(Igniter) do
               end)
             end,
             on_message_processed: fn _chain, data ->
+            content = LangChain.Message.ContentPart.content_to_string(data.content)
+
               if (data.tool_calls && Enum.any?(data.tool_calls)) ||
                    (data.tool_results && Enum.any?(data.tool_results)) ||
-                   LangChain.Message.ContentPart.content_to_string(data.content) not in [nil, ""] do
+                    content not in [nil, ""] do
                 #{inspect(message)}
                 |> Ash.Changeset.for_create(
                   :upsert_response,
@@ -560,7 +562,7 @@ if Code.ensure_loaded?(Igniter) do
                             end
                           )
                         ),
-                    text: LangChain.Message.ContentPart.content_to_string(data.content) || ""
+                    text: content || ""
                   },
                   actor: %AshAi{}
                 )
