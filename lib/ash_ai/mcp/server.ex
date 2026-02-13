@@ -77,7 +77,7 @@ defmodule AshAi.Mcp.Server do
       # Send the post_url in an endpoint event according to MCP specification
       |> Plug.Conn.send_chunked(200)
       |> send_sse_event("endpoint", Jason.encode!(%{"url" => post_url}))
-      |> Plug.Conn.halt()
+      |> keep_alive()
     else
       # Client doesn't support SSE
       conn
@@ -144,6 +144,17 @@ defmodule AshAi.Mcp.Server do
       else
         "#{opts[:otp_app]} MCP Server"
       end
+    end
+  end
+
+  defp keep_alive(conn) do
+    receive do
+    after
+      30_000 ->
+        case Plug.Conn.chunk(conn, ": ping\n\n") do
+          {:ok, conn} -> keep_alive(conn)
+          {:error, _} -> conn
+        end
     end
   end
 
