@@ -11,8 +11,8 @@ defmodule AshAi.Actions.Prompt.Adapter.StructuredOutput do
   @behaviour AshAi.Actions.Prompt.Adapter
 
   alias AshAi.Actions.Prompt.Adapter.Data
-  alias LangChain.ChatModels
   alias LangChain.Chains.LLMChain
+  alias LangChain.ChatModels
   alias LangChain.Message.ContentPart
 
   def run(%Data{} = data, _opts) do

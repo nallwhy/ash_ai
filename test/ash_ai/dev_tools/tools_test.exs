@@ -15,7 +15,7 @@ defmodule AshAi.DevTools.ToolsTest do
       assert is_list(results)
 
       # Should find some packages with usage rules
-      assert length(results) > 0
+      refute Enum.empty?(results)
 
       for %{package: package, package_description: description, file_path: file_path} <- results do
         assert is_binary(package)
@@ -68,14 +68,14 @@ defmodule AshAi.DevTools.ToolsTest do
       assert is_list(results)
 
       # Verify we get some results from the test app
-      assert length(results) > 0
+      refute Enum.empty?(results)
 
       test_resources =
         Enum.filter(results, fn resource ->
           resource.name =~ "Test" or resource.domain =~ "Test"
         end)
 
-      assert length(test_resources) > 0
+      refute Enum.empty?(test_resources)
 
       for %{name: name, domain: domain} <- results do
         assert is_binary(name)
@@ -98,7 +98,7 @@ defmodule AshAi.DevTools.ToolsTest do
           gen.command =~ "ash_ai"
         end)
 
-      assert length(ash_ai_generators) > 0
+      refute Enum.empty?(ash_ai_generators)
 
       for %{command: command, docs: docs} <- results do
         assert is_binary(command)

@@ -171,7 +171,7 @@ defmodule AshAi.ToolCallbacksTest do
       assert is_binary(json_result)
       assert {:ok, decoded} = Jason.decode(json_result)
       assert is_list(decoded)
-      assert length(decoded) > 0
+      refute Enum.empty?(decoded)
     end
 
     test "called with error result for invalid input" do

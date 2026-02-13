@@ -158,7 +158,7 @@ defmodule AshAi.Mcp.ToolsTest do
 
       assert list_response.status == 200
       tools = list_body["result"]["tools"]
-      assert length(tools) > 0
+      refute Enum.empty?(tools)
 
       # Step 3: Call a tool from the list
       first_tool = hd(tools)

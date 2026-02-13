@@ -24,7 +24,7 @@ defmodule AshAi.Mcp.ResourcesTest do
       assert body["jsonrpc"] == "2.0"
       assert body["id"] == "list_1"
       assert is_list(body["result"]["resources"])
-      assert length(body["result"]["resources"]) > 0
+      refute Enum.empty?(body["result"]["resources"])
 
       # Verify at least the artist_card resource is present
       artist_card = Enum.find(body["result"]["resources"], &(&1["name"] == "artist_card"))

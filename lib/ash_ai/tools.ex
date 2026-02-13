@@ -450,10 +450,12 @@ defmodule AshAi.Tools do
         )
       end)
 
-    # We iterate over the tool DSL arguments and merge them into the same 'properties' map to maintain a flat list of inputs for the agent.
+    # We iterate over the tool DSL arguments and merge them into the same 'properties' map
+    # to maintain a flat list of inputs for the agent.
     properties =
       Enum.reduce(tool_arguments, properties, fn argument, props ->
-        # We construct a map that mimics an Ash.Resource.Argument so we can reuse the existing OpenApi the existing OpenApi type conversion logic (Ash Type -> JSON Schema)..
+        # We construct a map that mimics an Ash.Resource.Argument so we can reuse
+        # the existing OpenApi type conversion logic (Ash Type -> JSON Schema).
         tool_argument = %{
           name: argument.name,
           type: argument.type,
