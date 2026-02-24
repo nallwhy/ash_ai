@@ -237,24 +237,21 @@ defmodule AshAi.Mcp.Server do
 
       # TODO: this can support paginaton via params later
       %{"method" => "resources/list", "id" => id} ->
-        resources =
+        action_resources =
           opts
-          |> mcp_resources()
-          |> Enum.map(fn resource ->
-            %{
-              "name" => resource.name,
-              "description" => resource.description,
-              "uri" => resource.uri,
-              "title" => resource.title,
-              "mimeType" => resource.mime_type
-            }
-          end)
+          |> mcp_action_resources()
+          |> Enum.map(&action_resource_to_map/1)
+
+        ui_resources =
+          opts
+          |> mcp_ui_resources()
+          |> Enum.map(&ui_resource_to_map/1)
 
         response = %{
           "jsonrpc" => "2.0",
           "id" => id,
           "result" => %{
-            "resources" => resources
+            "resources" => action_resources ++ ui_resources
           }
         }
 
@@ -269,30 +266,38 @@ defmodule AshAi.Mcp.Server do
             &Map.put(&1, :mcp_session_id, session_id)
           )
 
-        with %AshAi.McpResource{
-               uri: uri,
-               mime_type: mime_type
-             } = mcp_resource <-
-               find_mcp_resource_by_uri(uri, opts),
-             {:ok, text} <-
-               run_mcp_resource_action(mcp_resource, params, opts) do
+        with {:ok, resource} <- find_mcp_resource_by_uri(uri, opts),
+             {:ok, text} <- read_mcp_resource(resource, params, opts) do
+          mime_type =
+            case resource do
+              %AshAi.McpUiResource{} -> AshAi.McpUiResource.mime_type()
+              %AshAi.McpResource{mime_type: mt} -> mt
+            end
+
+          content =
+            %{"uri" => uri, "mimeType" => mime_type, "text" => text}
+            |> then(fn content ->
+              case resource do
+                %AshAi.McpUiResource{} = mcp_ui_resource ->
+                  ui_meta = build_ui_meta(mcp_ui_resource)
+                  put_if(content, "_meta", if(ui_meta != %{}, do: %{"ui" => ui_meta}))
+
+                _ ->
+                  content
+              end
+            end)
+
           response = %{
             "jsonrpc" => "2.0",
             "id" => id,
             "result" => %{
-              "contents" => [
-                %{
-                  "uri" => uri,
-                  "mimeType" => mime_type,
-                  "text" => text
-                }
-              ]
+              "contents" => [content]
             }
           }
 
           {:json_response, Jason.encode!(response), session_id}
         else
-          nil ->
+          {:error, :not_found} ->
             response = %{
               "jsonrpc" => "2.0",
               "id" => id,
@@ -436,13 +441,17 @@ defmodule AshAi.Mcp.Server do
   # tools always enabled
   defp capabilities([]), do: %{"tools" => %{"listChanged" => false}}
 
-  # at least 1 mcp_resource adds resources to capabilities
-  defp capabilities([_ | _] = _mcp_resources),
+  # at least 1 mcp_resource (mcp_action_resource or mcp_ui_resource) adds resources capability
+  defp capabilities([_ | _]),
     do:
       capabilities([])
       |> Map.put("resources", %{})
 
   defp mcp_resources(opts) do
+    mcp_action_resources(opts) ++ mcp_ui_resources(opts)
+  end
+
+  defp mcp_action_resources(opts) do
     opts
     |> Keyword.take([
       :otp_app,
@@ -459,44 +468,42 @@ defmodule AshAi.Mcp.Server do
       %{otp_app: opts[:otp_app]},
       &Map.put(&1, :otp_app, opts[:otp_app])
     )
-    |> AshAi.exposed_mcp_resources()
+    |> AshAi.exposed_mcp_action_resources()
+  end
+
+  defp mcp_ui_resources(opts) do
+    opts
+    |> Keyword.take([
+      :otp_app,
+      :actor,
+      :context,
+      :tenant,
+      :actions,
+      :mcp_resources
+    ])
+    |> Keyword.update(
+      :context,
+      %{otp_app: opts[:otp_app]},
+      &Map.put(&1, :otp_app, opts[:otp_app])
+    )
+    |> AshAi.exposed_mcp_ui_resources()
   end
 
   defp find_mcp_resource_by_uri(uri, opts) do
-    opts
-    |> mcp_resources()
-    |> Enum.find(&(&1.uri == uri))
+    case Enum.find(mcp_resources(opts), &(&1.uri == uri)) do
+      nil -> {:error, :not_found}
+      resource -> {:ok, resource}
+    end
   end
 
-  defp find_tool_by_name(tool_name, session_id, opts) do
-    opts
-    |> Keyword.take([:otp_app, :tools, :actor, :context, :tenant, :actions])
-    |> Keyword.update(
-      :context,
-      %{mcp_session_id: session_id},
-      &Map.put(&1, :mcp_session_id, session_id)
-    )
-    |> Keyword.update(
-      :context,
-      %{otp_app: opts[:otp_app]},
-      &Map.put(&1, :otp_app, opts[:otp_app])
-    )
-    |> tools()
-    |> Enum.find(&(to_string(&1.name) == tool_name))
+  defp read_mcp_resource(%AshAi.McpUiResource{html_path: path}, _params, _opts) do
+    case File.read(path) do
+      {:ok, _contents} = ok -> ok
+      {:error, reason} -> {:error, "Failed to read file: #{inspect(reason)}"}
+    end
   end
 
-  defp tool_context(opts) do
-    opts
-    |> Keyword.take([:actor, :tenant, :context])
-    |> Map.new()
-    |> Map.update(
-      :context,
-      %{otp_app: opts[:otp_app]},
-      &Map.put(&1, :otp_app, opts[:otp_app])
-    )
-  end
-
-  defp run_mcp_resource_action(
+  defp read_mcp_resource(
          %AshAi.McpResource{
            domain: domain,
            resource: resource,
@@ -536,6 +543,100 @@ defmodule AshAi.Mcp.Server do
       result ->
         result
     end
+  end
+
+  defp action_resource_to_map(%AshAi.McpResource{} = resource) do
+    %{
+      "name" => resource.name,
+      "description" => resource.description,
+      "uri" => resource.uri,
+      "title" => resource.title,
+      "mimeType" => resource.mime_type
+    }
+  end
+
+  defp ui_resource_to_map(%AshAi.McpUiResource{} = resource) do
+    ui_meta = build_ui_meta(resource)
+
+    %{
+      "name" => Atom.to_string(resource.name),
+      "uri" => resource.uri,
+      "title" => resource.title || Atom.to_string(resource.name),
+      "mimeType" => AshAi.McpUiResource.mime_type()
+    }
+    |> put_if("description", resource.description)
+    |> put_if("_meta", if(ui_meta != %{}, do: %{"ui" => ui_meta}))
+  end
+
+  defp build_ui_meta(%AshAi.McpUiResource{} = resource) do
+    permissions =
+      case resource.permissions do
+        [_ | _] ->
+          Map.new(resource.permissions, fn {key, _value} -> {snake_to_camel(key), %{}} end)
+
+        _ ->
+          nil
+      end
+
+    csp =
+      case resource.csp do
+        [_ | _] -> keyword_to_camel_case_map(resource.csp)
+        _ -> nil
+      end
+
+    %{}
+    |> put_if("csp", csp)
+    |> put_if("permissions", permissions)
+    |> put_if("domain", resource.domain)
+    |> put_if("prefersBorder", resource.prefers_border)
+  end
+
+  defp put_if(map, _key, nil), do: map
+  defp put_if(map, key, value), do: Map.put(map, key, value)
+
+  # Converts a keyword list to a map with camelCase string keys.
+  # e.g. [connect_domains: ["a.com"]] -> %{"connectDomains" => ["a.com"]}
+  defp keyword_to_camel_case_map(keyword) do
+    Map.new(keyword, fn {key, value} -> {snake_to_camel(key), value} end)
+  end
+
+  # Converts a snake_case atom to a camelCase string.
+  # e.g. :clipboard_write -> "clipboardWrite"
+  defp snake_to_camel(atom) do
+    [first | rest] =
+      atom
+      |> Atom.to_string()
+      |> String.split("_")
+
+    Enum.join([first | Enum.map(rest, &String.capitalize/1)])
+  end
+
+  defp find_tool_by_name(tool_name, session_id, opts) do
+    opts
+    |> Keyword.take([:otp_app, :tools, :actor, :context, :tenant, :actions])
+    |> Keyword.update(
+      :context,
+      %{mcp_session_id: session_id},
+      &Map.put(&1, :mcp_session_id, session_id)
+    )
+    |> Keyword.update(
+      :context,
+      %{otp_app: opts[:otp_app]},
+      &Map.put(&1, :otp_app, opts[:otp_app])
+    )
+    |> tools()
+    |> Enum.find(&(to_string(&1.name) == tool_name))
+  end
+
+  defp tool_context(opts) do
+    opts
+    |> Keyword.take([:actor, :tenant, :context])
+    |> Map.new()
+    |> Map.update(
+      :context,
+      %{otp_app: opts[:otp_app]},
+      &Map.put(&1, :otp_app, opts[:otp_app])
+    )
   end
 
   defp take_valid_params(params, action) do
