@@ -278,7 +278,7 @@ defmodule AshAi.Dsl do
     iframe by MCP hosts (like Claude Desktop). Link tools to UI resources using the tool's
     `ui:` option or `_meta.ui.resourceUri`.
 
-    See [MCP Apps spec](https://modelcontextprotocol.github.io/ext-apps/api/#specification).
+    See [MCP Apps spec](https://modelcontextprotocol.io/specification/2025-11-25).
     """,
     examples: [
       ~s(mcp_ui_resource :artist_viewer, "ui://artists/viewer.html", html_path: "priv/mcp_apps/artist_viewer.html"),

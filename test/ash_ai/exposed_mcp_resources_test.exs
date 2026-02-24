@@ -222,4 +222,37 @@ defmodule AshAi.ExposedMcpResourcesTest do
       end
     end
   end
+
+  describe "exposed_mcp_ui_resources filtering" do
+    test "mcp_resources: nil returns all UI resources (default)" do
+      resources = AshAi.exposed_mcp_ui_resources(@opts)
+
+      assert length(resources) == 2
+      names = Enum.map(resources, & &1.name)
+      assert :test_app in names
+      assert :test_app_with_opts in names
+    end
+
+    test "mcp_resources: :* returns all UI resources" do
+      opts = Keyword.put(@opts, :mcp_resources, :*)
+      resources = AshAi.exposed_mcp_ui_resources(opts)
+
+      assert length(resources) == 2
+    end
+
+    test "mcp_resources: [] excludes all UI resources" do
+      opts = Keyword.put(@opts, :mcp_resources, [])
+      resources = AshAi.exposed_mcp_ui_resources(opts)
+
+      assert Enum.empty?(resources)
+    end
+
+    test "mcp_resources: specific list filters to only those UI resources" do
+      opts = Keyword.put(@opts, :mcp_resources, [:test_app])
+      resources = AshAi.exposed_mcp_ui_resources(opts)
+
+      assert length(resources) == 1
+      assert hd(resources).name == :test_app
+    end
+  end
 end

@@ -142,7 +142,7 @@ defmodule AshAi do
     The HTML file at `html_path` is read at request time and returned with MIME type
     `text/html;profile=mcp-app`.
 
-    See https://modelcontextprotocol.io/extensions/apps/overview for the MCP Apps specification.
+    See [MCP Apps spec](https://modelcontextprotocol.io/specification/2025-11-25).
     """
 
     @mime_type "text/html;profile=mcp-app"

@@ -547,7 +547,7 @@ defmodule AshAi.Mcp.Server do
 
   defp action_resource_to_map(%AshAi.McpResource{} = resource) do
     %{
-      "name" => resource.name,
+      "name" => Atom.to_string(resource.name),
       "description" => resource.description,
       "uri" => resource.uri,
       "title" => resource.title,
