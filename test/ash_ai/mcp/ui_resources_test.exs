@@ -59,7 +59,6 @@ defmodule AshAi.Mcp.UiResourcesTest do
 
       refute Map.has_key?(plain_resource, "_meta")
     end
-
   end
 
   describe "mcp_ui_resource in resources/read" do
@@ -100,7 +99,6 @@ defmodule AshAi.Mcp.UiResourcesTest do
       [content] = body["result"]["contents"]
       refute Map.has_key?(content, "_meta")
     end
-
   end
 
   describe "Info introspection" do

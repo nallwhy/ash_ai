@@ -263,13 +263,11 @@ defmodule AshAi.Dsl do
     ],
     domain: [
       type: :string,
-      doc:
-        "Optional domain for the view's sandbox origin. Format is host-dependent."
+      doc: "Optional domain for the view's sandbox origin. Format is host-dependent."
     ],
     prefers_border: [
       type: :boolean,
-      doc:
-        "Whether the app prefers a visible border and background from the host."
+      doc: "Whether the app prefers a visible border and background from the host."
     ]
   ]
 
