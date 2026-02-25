@@ -877,7 +877,6 @@ defmodule AshAi.OpenApi do
         type: :object,
         properties: Map.new(fields),
         additionalProperties: false
-        # required: required Missing?
       }
       |> with_attribute_description(attribute_or_aggregate)
     end

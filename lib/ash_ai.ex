@@ -233,14 +233,37 @@ defmodule AshAi do
           end
           ```
           """
+        ],
+        strict: [
+          type: :boolean,
+          default: true,
+          doc: """
+          Whether to use strict schema mode when generating tool parameter schemas.
+
+          When `true` (the default), sets `strict: true` on the LangChain Function and
+          applies OpenAI-compatible strict schema transformation: all objects get
+          `additionalProperties: false`, all properties are included in `required`,
+          and optional properties are wrapped in `anyOf: [null, type]`.
+
+          Set to `false` when using providers that do not support this schema format:
+          - **Google Gemini**: rejects `additionalProperties` in function declarations.
+          - **Anthropic Claude**: limits schemas to 16 parameters with union types (`anyOf`);
+            the strict transformation of a resource with many filterable fields will exceed
+            this limit and cause a 400 error.
+
+          When `false`, `additionalProperties` is stripped from the schema and no
+          `anyOf` null-wrapping is applied.
+          """
         ]
       ]
   end
 
+  def functions(opts) when is_list(opts), do: functions(Options.validate!(opts))
+
   def functions(opts) do
     opts
     |> exposed_tools()
-    |> Enum.map(&AshAi.Tools.to_function/1)
+    |> Enum.map(&AshAi.Tools.to_function(&1, strict: opts.strict))
   end
 
   def iex_chat(lang_chain, opts \\ []) do

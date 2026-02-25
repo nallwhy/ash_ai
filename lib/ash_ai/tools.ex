@@ -14,6 +14,8 @@ defmodule AshAi.Tools do
   @doc """
   Converts a AshAi.Tool into a LangChain.Function
   """
+  def to_function(tool, opts \\ [])
+
   def to_function(
         %Tool{
           name: name,
@@ -24,9 +26,11 @@ defmodule AshAi.Tools do
           description: description,
           action_parameters: _action_parameters,
           arguments: _tool_arguments
-        } = tool
+        } = tool,
+        opts
       ) do
     name = to_string(name)
+    strict? = Keyword.get(opts, :strict, true)
 
     description =
       String.trim(
@@ -34,13 +38,13 @@ defmodule AshAi.Tools do
           "Call the #{action.name} action on the #{inspect(resource)} resource"
       )
 
-    parameter_schema = parameter_schema(tool)
+    parameter_schema = parameter_schema(tool, strict?)
 
     LangChain.Function.new!(%{
       name: name,
       description: description,
       parameters_schema: parameter_schema,
-      strict: true,
+      strict: strict?,
       async: async,
       function: &execute(tool, &1, &2)
     })
@@ -143,10 +147,27 @@ defmodule AshAi.Tools do
               end
             end)
             |> then(fn query ->
-              if Map.has_key?(arguments, "filter") do
-                Ash.Query.filter_input(query, arguments["filter"])
-              else
-                query
+              case arguments["filter"] do
+                nil ->
+                  query
+
+                [] ->
+                  query
+
+                conditions when is_list(conditions) ->
+                  Enum.reduce(conditions, query, fn
+                    %{"field" => field, "operator" => op, "value" => value}, query ->
+                      Ash.Query.filter_input(query, %{field => %{op => value}})
+
+                    _, query ->
+                      query
+                  end)
+
+                filter when is_map(filter) and map_size(filter) > 0 ->
+                  Ash.Query.filter_input(query, filter)
+
+                _ ->
+                  query
               end
             end)
             |> Ash.Query.for_read(action.name, input, opts)
@@ -416,7 +437,7 @@ defmodule AshAi.Tools do
          action: action,
          action_parameters: action_parameters,
          arguments: tool_arguments
-       }) do
+       }, strict?) do
     attributes =
       if action.type in [:action, :read] do
         %{}
@@ -497,73 +518,247 @@ defmodule AshAi.Tools do
     %{
       type: :object,
       properties:
-        add_action_specific_properties(props_with_input, resource, action, action_parameters),
+        add_action_specific_properties(props_with_input, resource, action, action_parameters,
+          strict?: strict?
+        ),
       required: Map.keys(props_with_input),
       additionalProperties: false
     }
     |> Jason.encode!()
     |> Jason.decode!()
+    |> then(fn schema ->
+      if strict? do
+        make_strict_schema(schema)
+      else
+        strip_additional_properties(schema)
+      end
+    end)
   end
+
+  # Recursively transforms a JSON schema to be OpenAI strict-mode compliant:
+  # - Every object gets `additionalProperties: false`
+  # - Every property in an object is either in `required` or wrapped in `anyOf: [null, type]`
+  #   so the LLM may supply null rather than omitting the field.
+  defp make_strict_schema(schema) when is_map(schema) do
+    schema =
+      if schema["type"] == "object" && is_map(schema["properties"]) do
+        already_required = MapSet.new(schema["required"] || [])
+
+        updated_props =
+          Map.new(schema["properties"], fn {k, v} ->
+            if MapSet.member?(already_required, k) do
+              {k, make_strict_schema(v)}
+            else
+              {k, %{"anyOf" => [%{"type" => "null"}, make_strict_schema(v)]}}
+            end
+          end)
+
+        schema
+        |> Map.put("properties", updated_props)
+        |> Map.put("required", Map.keys(schema["properties"]))
+        |> Map.put("additionalProperties", false)
+      else
+        schema
+      end
+
+    # Recurse into anyOf / items
+    schema
+    |> then(fn s ->
+      case s["anyOf"] do
+        nil -> s
+        types -> Map.put(s, "anyOf", Enum.map(types, &make_strict_schema/1))
+      end
+    end)
+    |> then(fn s ->
+      case s["items"] do
+        nil -> s
+        items -> Map.put(s, "items", make_strict_schema(items))
+      end
+    end)
+  end
+
+  defp make_strict_schema(schema) when is_list(schema) do
+    Enum.map(schema, &make_strict_schema/1)
+  end
+
+  defp make_strict_schema(schema), do: schema
+
+  # Recursively removes `additionalProperties` from a JSON schema map.
+  # Used for providers like Google Gemini that don't support the field.
+  defp strip_additional_properties(schema) when is_map(schema) do
+    schema
+    |> Map.delete("additionalProperties")
+    |> Map.new(fn {k, v} -> {k, strip_additional_properties(v)} end)
+  end
+
+  defp strip_additional_properties(schema) when is_list(schema) do
+    Enum.map(schema, &strip_additional_properties/1)
+  end
+
+  defp strip_additional_properties(schema), do: schema
+
+  defp add_action_specific_properties(properties, resource, action, action_parameters, opts \\ [])
 
   defp add_action_specific_properties(
          properties,
          resource,
          %{type: :read, pagination: pagination},
-         action_parameters
+         action_parameters,
+         opts
        ) do
-    Map.merge(properties, %{
-      filter: %{
-        type: :object,
-        description: "Filter results",
-        # querying is complex, will likely need to be a two step process
-        # i.e first decide to query, and then provide it with a function to call
-        # that has all the options Then the filter object can be big & expressive.
-        properties:
+    strict? = Keyword.get(opts, :strict?, true)
+
+    aggregate_fields =
+      Ash.Resource.Info.fields(resource, [
+        :attributes,
+        :aggregates,
+        :calculations
+      ])
+      |> Enum.filter(& &1.public?)
+      |> Enum.map(& &1.name)
+
+    result_type_schema =
+      if strict? do
+        # OpenAI strict mode does not support `oneOf`. Use `anyOf` with
+        # properly-typed subschemas so the LLM can choose either a string
+        # (simple result kind) or an object (aggregate).
+        %{
+          default: "run_query",
+          description: "The type of result to return",
+          anyOf: [
+            %{
+              type: :string,
+              description:
+                "Run the query returning all results, or return a count of results, or check if any results exist",
+              enum: ["run_query", "count", "exists"]
+            },
+            %{
+              type: :object,
+              description: "Aggregate a field across all results",
+              additionalProperties: false,
+              required: [:aggregate, :field],
+              properties: %{
+                aggregate: %{
+                  type: :string,
+                  description: "The aggregate function to use",
+                  enum: [:max, :min, :sum, :avg, :count]
+                },
+                field: %{
+                  type: :string,
+                  description: "The field to aggregate",
+                  enum: aggregate_fields
+                }
+              }
+            }
+          ]
+        }
+      else
+        %{
+          default: "run_query",
+          description: "The type of result to return",
+          oneOf: [
+            %{
+              description:
+                "Run the query returning all results, or return a count of results, or check if any results exist",
+              enum: [
+                "run_query",
+                "count",
+                "exists"
+              ]
+            },
+            %{
+              properties: %{
+                aggregate: %{
+                  type: :string,
+                  description: "The aggregate function to use",
+                  enum: [:max, :min, :sum, :avg, :count]
+                },
+                field: %{
+                  type: :string,
+                  description: "The field to aggregate",
+                  enum: aggregate_fields
+                }
+              }
+            }
+          ]
+        }
+      end
+
+    filter_schema =
+      if strict? do
+        {filterable_fields, available_operators} =
           Ash.Resource.Info.fields(resource, [:attributes, :aggregates, :calculations])
           |> Enum.filter(&(&1.public? && &1.filterable?))
-          |> Map.new(fn field ->
-            value =
-              AshAi.OpenApi.raw_filter_type(field, resource)
+          |> Enum.reduce({[], MapSet.new()}, fn field, {fields, ops} ->
+            case AshAi.OpenApi.raw_filter_type(field, resource) do
+              nil ->
+                {fields, ops}
 
-            {field.name, value}
+              %{properties: props} ->
+                field_ops = props |> Map.keys() |> Enum.map(&to_string/1) |> MapSet.new()
+                {[field.name | fields], MapSet.union(ops, field_ops)}
+
+              _ ->
+                {fields, ops}
+            end
           end)
-      },
-      result_type: %{
-        default: "run_query",
-        description: "The type of result to return",
-        oneOf: [
-          %{
-            description:
-              "Run the query returning all results, or return a count of results, or check if any results exist",
-            enum: [
-              "run_query",
-              "count",
-              "exists"
-            ]
-          },
-          %{
+          |> then(fn {fields, ops} ->
+            {Enum.reverse(fields), ops |> MapSet.to_list() |> Enum.sort()}
+          end)
+
+        %{
+          type: :array,
+          description:
+            "Filter conditions to apply. Each entry filters on one field with one operator and value. Multiple entries are ANDed together.",
+          items: %{
+            type: :object,
+            additionalProperties: false,
+            required: [:field, :operator, :value],
             properties: %{
-              aggregate: %{
-                type: :string,
-                description: "The aggregate function to use",
-                enum: [:max, :min, :sum, :avg, :count]
-              },
               field: %{
                 type: :string,
-                description: "The field to aggregate",
-                enum:
-                  Ash.Resource.Info.fields(resource, [
-                    :attributes,
-                    :aggregates,
-                    :calculations
-                  ])
-                  |> Enum.filter(& &1.public?)
-                  |> Enum.map(& &1.name)
+                description: "The field to filter on",
+                enum: filterable_fields
+              },
+              operator: %{
+                type: :string,
+                description:
+                  "The comparison operator. Use 'is_nil' with true/false to check for null values.",
+                enum: available_operators
+              },
+              value: %{
+                description:
+                  "The comparison value. For 'is_nil' use true or false. For 'in'/'not_in' use an array of values.",
+                anyOf: [
+                  %{type: :string},
+                  %{type: :number},
+                  %{type: :boolean},
+                  %{type: :null},
+                  %{
+                    type: :array,
+                    items: %{anyOf: [%{type: :string}, %{type: :number}, %{type: :boolean}]}
+                  }
+                ]
               }
             }
           }
-        ]
-      },
+        }
+      else
+        %{
+          type: :object,
+          description: "Filter results",
+          properties:
+            Ash.Resource.Info.fields(resource, [:attributes, :aggregates, :calculations])
+            |> Enum.filter(&(&1.public? && &1.filterable?))
+            |> Map.new(fn field ->
+              {field.name, AshAi.OpenApi.raw_filter_type(field, resource)}
+            end)
+        }
+      end
+
+    Map.merge(properties, %{
+      filter: filter_schema,
+      result_type: result_type_schema,
       limit: %{
         type: :integer,
         description: "The maximum number of records to return",
@@ -618,7 +813,13 @@ defmodule AshAi.Tools do
     end)
   end
 
-  defp add_action_specific_properties(properties, resource, %{type: type}, _action_parameters)
+  defp add_action_specific_properties(
+         properties,
+         resource,
+         %{type: type},
+         _action_parameters,
+         _opts
+       )
        when type in [:update, :destroy] do
     pkey =
       Map.new(Ash.Resource.Info.primary_key(resource), fn key ->
@@ -632,7 +833,8 @@ defmodule AshAi.Tools do
     Map.merge(properties, pkey)
   end
 
-  defp add_action_specific_properties(properties, _resource, _action, _tool), do: properties
+  defp add_action_specific_properties(properties, _resource, _action, _tool, _opts),
+    do: properties
 
   defp add_input_for_fields(sort_obj, resource) do
     resource
@@ -648,7 +850,6 @@ defmodule AshAi.Tools do
         input_for_fields =
           %{
             type: :object,
-            additonalProperties: false,
             properties:
               Map.new(fields, fn field ->
                 inputs =
@@ -676,8 +877,7 @@ defmodule AshAi.Tools do
                  %{
                    type: :object,
                    properties: Map.new(inputs),
-                   required: required,
-                   additionalProperties: false
+                   required: required
                  }}
               end)
           }
