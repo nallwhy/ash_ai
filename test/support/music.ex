@@ -27,7 +27,7 @@ defmodule AshAi.Test.Music do
          AshAi.Test.Music.ArtistAfterAction,
          :read,
          description: "Read artists with UI",
-         ui: "ui://test/app.html"
+         ui: :test_app
   end
 
   mcp_resources do

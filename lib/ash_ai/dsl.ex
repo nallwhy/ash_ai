@@ -87,9 +87,9 @@ defmodule AshAi.Dsl do
         "Optional metadata map for tool integrations. Supports provider-specific extensions like OpenAI metadata. Keys and values should be strings to comply with JSON-RPC serialization."
     ],
     ui: [
-      type: :string,
+      type: {:or, [:atom, :string]},
       doc:
-        "The ui:// resource URI for MCP Apps. Shortcut for setting `_meta.ui.resourceUri`. The referenced resource should be declared as an `mcp_ui_resource`."
+        "The `mcp_ui_resource` name (atom) or a `ui://` URI string for MCP Apps. Shortcut for setting `_meta.ui.resourceUri`. When an atom is given, the URI is resolved from the matching `mcp_ui_resource` declaration."
     ]
   ]
 
