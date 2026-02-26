@@ -22,9 +22,7 @@ defmodule AshAi.Mcp.Server do
     _accept_sse = Enum.any?(accept_header, &String.contains?(&1, "text/event-stream"))
     _accept_json = Enum.any?(accept_header, &String.contains?(&1, "application/json"))
 
-    host = Plug.Conn.get_req_header(conn, "host") |> List.first()
-    scheme = if conn.scheme == :https, do: "https", else: "http"
-    server_url = "#{scheme}://#{host}#{conn.request_path}"
+    server_url = server_url(conn)
 
     opts =
       [
@@ -69,11 +67,7 @@ defmodule AshAi.Mcp.Server do
     accept_header = Plug.Conn.get_req_header(conn, "accept")
 
     if Enum.any?(accept_header, &String.contains?(&1, "text/event-stream")) do
-      # Get the current host and path to create the post URL
-      host = Plug.Conn.get_req_header(conn, "host") |> List.first()
-      scheme = if conn.scheme == :https, do: "https", else: "http"
-      path = conn.request_path
-      post_url = "#{scheme}://#{host}#{path}"
+      post_url = server_url(conn)
 
       # Set up SSE stream
       conn
@@ -640,6 +634,18 @@ defmodule AshAi.Mcp.Server do
     |> Base.encode16(case: :lower)
     |> binary_part(0, 32)
     |> Kernel.<>(".claudemcpcontent.com")
+  end
+
+  defp server_url(conn) do
+    host = Plug.Conn.get_req_header(conn, "host") |> List.first()
+
+    scheme =
+      case Plug.Conn.get_req_header(conn, "x-forwarded-proto") do
+        [proto | _] -> proto
+        [] -> to_string(conn.scheme)
+      end
+
+    "#{scheme}://#{host}#{conn.request_path}"
   end
 
   defp put_if(map, _key, nil), do: map
