@@ -579,14 +579,13 @@ defmodule AshAi.Mcp.Server do
 
     csp =
       case resource.csp do
-        [_ | _] -> keyword_to_camel_case_map(resource.csp)
-        _ -> nil
+        list when is_list(list) -> keyword_to_camel_case_map(list)
+        _ -> %{}
       end
 
     domain = resolve_domain(resource.domain, opts)
 
-    %{}
-    |> put_if("csp", csp)
+    %{"csp" => csp}
     |> put_if("permissions", permissions)
     |> put_if("domain", domain)
     |> put_if("prefersBorder", resource.prefers_border)
