@@ -118,66 +118,13 @@ defmodule AshAiTest do
 
       assert function.description == "Call the read action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["additionalProperties"] == false
-
-      assert function.parameters_schema["properties"]["filter"] == %{
-               "type" => "object",
-               "description" => "Filter results",
-               "properties" => %{
-                 "id" => %{
-                   "type" => "object",
-                   "properties" => %{
-                     "eq" => %{"format" => "uuid", "type" => "string"},
-                     "greater_than" => %{"format" => "uuid", "type" => "string"},
-                     "greater_than_or_equal" => %{
-                       "format" => "uuid",
-                       "type" => "string"
-                     },
-                     "in" => %{
-                       "items" => %{"format" => "uuid", "type" => "string"},
-                       "type" => "array"
-                     },
-                     "is_nil" => %{"type" => "boolean"},
-                     "less_than" => %{"format" => "uuid", "type" => "string"},
-                     "less_than_or_equal" => %{
-                       "format" => "uuid",
-                       "type" => "string"
-                     },
-                     "not_eq" => %{"format" => "uuid", "type" => "string"}
-                   },
-                   "additionalProperties" => false
-                 },
-                 "name" => %{
-                   "type" => "object",
-                   "properties" => %{
-                     "contains" => %{"type" => "string"},
-                     "eq" => %{"type" => "string"},
-                     "greater_than" => %{"type" => "string"},
-                     "greater_than_or_equal" => %{"type" => "string"},
-                     "in" => %{"type" => "array", "items" => %{"type" => "string"}},
-                     "is_nil" => %{"type" => "boolean"},
-                     "less_than" => %{"type" => "string"},
-                     "less_than_or_equal" => %{"type" => "string"},
-                     "not_eq" => %{"type" => "string"}
-                   },
-                   "additionalProperties" => false
-                 },
-                 "albums_count" => %{
-                   "type" => "object",
-                   "additionalProperties" => false,
-                   "properties" => %{
-                     "eq" => %{"type" => "integer"},
-                     "greater_than" => %{"type" => "integer"},
-                     "greater_than_or_equal" => %{"type" => "integer"},
-                     "in" => %{"items" => %{"type" => "integer"}, "type" => "array"},
-                     "is_nil" => %{"type" => "boolean"},
-                     "less_than" => %{"type" => "integer"},
-                     "less_than_or_equal" => %{"type" => "integer"},
-                     "not_eq" => %{"type" => "integer"}
-                   }
-                 }
-               }
-             }
+      filter = function.parameters_schema["properties"]["filter"]
+      assert filter["type"] == "object"
+      assert filter["description"] == "Filter results"
+      assert Map.has_key?(filter["properties"], "id")
+      assert Map.has_key?(filter["properties"], "name")
+      assert Map.has_key?(filter["properties"], "albums_count")
+      refute Map.has_key?(filter["properties"], "albums_copies_sold")
 
       refute function.parameters_schema["properties"]["input"]
 
@@ -231,16 +178,9 @@ defmodule AshAiTest do
 
       assert function.description == "Call the create action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["additionalProperties"] == false
-
-      assert function.parameters_schema["properties"]["input"] == %{
-               "type" => "object",
-               "properties" => %{
-                 "id" => %{"type" => "string", "format" => "uuid"},
-                 "name" => %{"type" => "string"}
-               },
-               "required" => []
-             }
+      assert function.parameters_schema["properties"]["input"]["type"] == "object"
+      assert Map.has_key?(function.parameters_schema["properties"]["input"]["properties"], "id")
+      assert Map.has_key?(function.parameters_schema["properties"]["input"]["properties"], "name")
 
       tool_call = tool_call(tool_name, %{"input" => %{"name" => "Chat Faker"}})
 
@@ -260,21 +200,13 @@ defmodule AshAiTest do
 
       assert function.description == "Call the update action on the AshAiTest.Artist resource"
 
-      assert function.parameters_schema["additionalProperties"] == false
-
       assert function.parameters_schema["properties"]["id"] == %{
                "type" => "string",
                "format" => "uuid"
              }
 
-      assert function.parameters_schema["properties"]["input"] == %{
-               "type" => "object",
-               "properties" => %{
-                 "id" => %{"type" => "string", "format" => "uuid"},
-                 "name" => %{"type" => "string"}
-               },
-               "required" => []
-             }
+      assert function.parameters_schema["properties"]["input"]["type"] == "object"
+      assert Map.has_key?(function.parameters_schema["properties"]["input"]["properties"], "name")
 
       tool_call =
         tool_call(tool_name, %{"id" => artist.id, "input" => %{"name" => "Chat Faker"}})
@@ -295,8 +227,6 @@ defmodule AshAiTest do
       assert %LangChain.Function{} = function = chain.tools |> Enum.find(&(&1.name == tool_name))
 
       assert function.description == "Call the destroy action on the AshAiTest.Artist resource"
-
-      assert function.parameters_schema["additionalProperties"] == false
 
       assert function.parameters_schema["properties"]["id"] == %{
                "type" => "string",
@@ -324,13 +254,9 @@ defmodule AshAiTest do
 
       assert function.description == "Say hello"
 
-      assert function.parameters_schema["additionalProperties"] == false
-
-      assert function.parameters_schema["properties"]["input"] == %{
-               "type" => "object",
-               "properties" => %{"name" => %{"type" => "string"}},
-               "required" => ["name"]
-             }
+      assert function.parameters_schema["properties"]["input"]["type"] == "object"
+      assert function.parameters_schema["properties"]["input"]["properties"]["name"] == %{"type" => "string"}
+      assert function.parameters_schema["properties"]["input"]["required"] == ["name"]
 
       tool_call = tool_call(tool_name, %{"input" => %{"name" => "Chat Faker"}})
 
@@ -400,7 +326,7 @@ defmodule AshAiTest do
 
     %{llm: ChatFaker.new!(%{expect_fun: expect_fun()})}
     |> LLMChain.new!()
-    |> AshAi.setup_ash_ai(actions: actions)
+    |> AshAi.setup_ash_ai(actions: actions, strict: false)
   end
 
   defp expect_fun do

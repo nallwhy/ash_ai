@@ -159,6 +159,18 @@ defmodule AshAi.Tools do
                     %{"field" => field, "operator" => op, "value" => value}, query ->
                       Ash.Query.filter_input(query, %{field => %{op => value}})
 
+                    %{"or" => sub_conditions}, query when is_list(sub_conditions) ->
+                      or_filters =
+                        Enum.flat_map(sub_conditions, fn
+                          %{"field" => field, "operator" => op, "value" => value} ->
+                            [%{field => %{op => value}}]
+
+                          _ ->
+                            []
+                        end)
+
+                      Ash.Query.filter_input(query, %{"or" => or_filters})
+
                     _, query ->
                       query
                   end)
@@ -431,13 +443,16 @@ defmodule AshAi.Tools do
     end)
   end
 
-  defp parameter_schema(%Tool{
-         domain: _domain,
-         resource: resource,
-         action: action,
-         action_parameters: action_parameters,
-         arguments: tool_arguments
-       }, strict?) do
+  defp parameter_schema(
+         %Tool{
+           domain: _domain,
+           resource: resource,
+           action: action,
+           action_parameters: action_parameters,
+           arguments: tool_arguments
+         },
+         strict?
+       ) do
     attributes =
       if action.type in [:action, :read] do
         %{}
@@ -597,7 +612,7 @@ defmodule AshAi.Tools do
 
   defp strip_additional_properties(schema), do: schema
 
-  defp add_action_specific_properties(properties, resource, action, action_parameters, opts \\ [])
+  defp add_action_specific_properties(properties, resource, action, action_parameters, opts)
 
   defp add_action_specific_properties(
          properties,
@@ -706,41 +721,59 @@ defmodule AshAi.Tools do
             {Enum.reverse(fields), ops |> MapSet.to_list() |> Enum.sort()}
           end)
 
+        condition_schema = %{
+          type: :object,
+          additionalProperties: false,
+          required: [:field, :operator, :value],
+          properties: %{
+            field: %{
+              type: :string,
+              description: "The field to filter on",
+              enum: filterable_fields
+            },
+            operator: %{
+              type: :string,
+              description:
+                "The comparison operator. Use 'is_nil' with true/false to check for null values.",
+              enum: available_operators
+            },
+            value: %{
+              description:
+                "The comparison value. For 'is_nil' use true or false. For 'in'/'not_in' use an array of values.",
+              anyOf: [
+                %{type: :string},
+                %{type: :number},
+                %{type: :boolean},
+                %{type: :null},
+                %{
+                  type: :array,
+                  items: %{anyOf: [%{type: :string}, %{type: :number}, %{type: :boolean}]}
+                }
+              ]
+            }
+          }
+        }
+
         %{
           type: :array,
           description:
-            "Filter conditions to apply. Each entry filters on one field with one operator and value. Multiple entries are ANDed together.",
+            "Filter conditions. Top-level entries are ANDed together. Use an {\"or\": [...]} entry to OR multiple conditions.",
           items: %{
-            type: :object,
-            additionalProperties: false,
-            required: [:field, :operator, :value],
-            properties: %{
-              field: %{
-                type: :string,
-                description: "The field to filter on",
-                enum: filterable_fields
-              },
-              operator: %{
-                type: :string,
-                description:
-                  "The comparison operator. Use 'is_nil' with true/false to check for null values.",
-                enum: available_operators
-              },
-              value: %{
-                description:
-                  "The comparison value. For 'is_nil' use true or false. For 'in'/'not_in' use an array of values.",
-                anyOf: [
-                  %{type: :string},
-                  %{type: :number},
-                  %{type: :boolean},
-                  %{type: :null},
-                  %{
+            anyOf: [
+              condition_schema,
+              %{
+                type: :object,
+                additionalProperties: false,
+                required: [:or],
+                properties: %{
+                  or: %{
                     type: :array,
-                    items: %{anyOf: [%{type: :string}, %{type: :number}, %{type: :boolean}]}
+                    description: "A list of conditions where any one must match.",
+                    items: condition_schema
                   }
-                ]
+                }
               }
-            }
+            ]
           }
         }
       else

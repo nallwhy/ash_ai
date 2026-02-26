@@ -236,7 +236,7 @@ defmodule AshAi.ToolTest do
 
     %{llm: ChatFaker.new!(%{})}
     |> LLMChain.new!()
-    |> AshAi.setup_ash_ai(actions: actions)
+    |> AshAi.setup_ash_ai(actions: actions, strict: false)
   end
 
   defp run_chain(chain, tool_call) do
@@ -253,7 +253,7 @@ defmodule AshAi.ToolTest do
 
     %{llm: ChatFaker.new!(%{})}
     |> LLMChain.new!()
-    |> AshAi.setup_ash_ai(actions: actions)
+    |> AshAi.setup_ash_ai(actions: actions, strict: false)
     |> Map.get(:tools)
     |> Enum.at(0)
   end

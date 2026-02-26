@@ -446,7 +446,9 @@ defmodule AshAi.OpenApiTest do
                    greater_than: %{type: :string, format: :uuid},
                    not_eq: %{type: :string, format: :uuid},
                    less_than_or_equal: %{type: :string, format: :uuid},
-                   greater_than_or_equal: %{type: :string, format: :uuid}
+                   greater_than_or_equal: %{type: :string, format: :uuid},
+                   is_distinct_from: %{type: :string},
+                   is_not_distinct_from: %{type: :string}
                  },
                  additionalProperties: false
                }

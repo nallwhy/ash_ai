@@ -245,11 +245,8 @@ defmodule AshAi do
           `additionalProperties: false`, all properties are included in `required`,
           and optional properties are wrapped in `anyOf: [null, type]`.
 
-          Set to `false` when using providers that do not support this schema format:
-          - **Google Gemini**: rejects `additionalProperties` in function declarations.
-          - **Anthropic Claude**: limits schemas to 16 parameters with union types (`anyOf`);
-            the strict transformation of a resource with many filterable fields will exceed
-            this limit and cause a 400 error.
+          Set to `false` when using providers that do not support `additionalProperties`
+          in function declarations, such as Google Gemini.
 
           When `false`, `additionalProperties` is stripped from the schema and no
           `anyOf` null-wrapping is applied.
