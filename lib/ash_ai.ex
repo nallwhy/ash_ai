@@ -155,7 +155,7 @@ defmodule AshAi do
             description: String.t() | nil,
             csp: keyword() | nil,
             permissions: keyword() | nil,
-            domain: String.t() | nil,
+            domain: :auto | String.t() | nil,
             prefers_border: boolean() | nil
           }
 

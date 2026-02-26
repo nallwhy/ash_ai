@@ -262,8 +262,10 @@ defmodule AshAi.Dsl do
       doc: "Browser permissions to request for the sandboxed iframe."
     ],
     domain: [
-      type: :string,
-      doc: "Optional domain for the view's sandbox origin. Format is host-dependent."
+      type: {:or, [:atom, :string]},
+      default: :auto,
+      doc:
+        "Domain for the view's sandbox origin. Defaults to `:auto`, which computes a Claude-compatible domain from the server URL at request time (see `AshAi.Mcp.Server.sandbox_domain/1`). Set to a string to override, or `nil` to omit."
     ],
     prefers_border: [
       type: :boolean,

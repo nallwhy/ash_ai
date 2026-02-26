@@ -22,11 +22,16 @@ defmodule AshAi.Mcp.Server do
     _accept_sse = Enum.any?(accept_header, &String.contains?(&1, "text/event-stream"))
     _accept_json = Enum.any?(accept_header, &String.contains?(&1, "application/json"))
 
+    host = Plug.Conn.get_req_header(conn, "host") |> List.first()
+    scheme = if conn.scheme == :https, do: "https", else: "http"
+    server_url = "#{scheme}://#{host}#{conn.request_path}"
+
     opts =
       [
         actor: Ash.PlugHelpers.get_actor(conn),
         tenant: Ash.PlugHelpers.get_tenant(conn),
-        context: Ash.PlugHelpers.get_context(conn) || %{}
+        context: Ash.PlugHelpers.get_context(conn) || %{},
+        server_url: server_url
       ]
       |> Keyword.merge(opts)
 
@@ -245,7 +250,7 @@ defmodule AshAi.Mcp.Server do
         ui_resources =
           opts
           |> mcp_ui_resources()
-          |> Enum.map(&ui_resource_to_map/1)
+          |> Enum.map(&ui_resource_to_map(&1, opts))
 
         response = %{
           "jsonrpc" => "2.0",
@@ -279,7 +284,7 @@ defmodule AshAi.Mcp.Server do
             |> then(fn content ->
               case resource do
                 %AshAi.McpUiResource{} = mcp_ui_resource ->
-                  ui_meta = build_ui_meta(mcp_ui_resource)
+                  ui_meta = build_ui_meta(mcp_ui_resource, opts)
                   put_if(content, "_meta", if(ui_meta != %{}, do: %{"ui" => ui_meta}))
 
                 _ ->
@@ -555,8 +560,8 @@ defmodule AshAi.Mcp.Server do
     }
   end
 
-  defp ui_resource_to_map(%AshAi.McpUiResource{} = resource) do
-    ui_meta = build_ui_meta(resource)
+  defp ui_resource_to_map(%AshAi.McpUiResource{} = resource, opts) do
+    ui_meta = build_ui_meta(resource, opts)
 
     %{
       "name" => Atom.to_string(resource.name),
@@ -568,7 +573,7 @@ defmodule AshAi.Mcp.Server do
     |> put_if("_meta", if(ui_meta != %{}, do: %{"ui" => ui_meta}))
   end
 
-  defp build_ui_meta(%AshAi.McpUiResource{} = resource) do
+  defp build_ui_meta(%AshAi.McpUiResource{} = resource, opts) do
     permissions =
       case resource.permissions do
         [_ | _] ->
@@ -584,11 +589,57 @@ defmodule AshAi.Mcp.Server do
         _ -> nil
       end
 
+    domain = resolve_domain(resource.domain, opts)
+
     %{}
     |> put_if("csp", csp)
     |> put_if("permissions", permissions)
-    |> put_if("domain", resource.domain)
+    |> put_if("domain", domain)
     |> put_if("prefersBorder", resource.prefers_border)
+  end
+
+  @doc """
+  Computes the sandbox domain for an `mcp_ui_resource` from the MCP server URL.
+
+  MCP hosts render UI resources in sandboxed iframes, and each host determines the
+  iframe's origin differently:
+
+  | Host    | Domain format                                    | Behavior                                              |
+  |---------|--------------------------------------------------|-------------------------------------------------------|
+  | Claude  | `{sha256_hash}.claudemcpcontent.com`             | Hash derived from the MCP server endpoint URL.        |
+  | ChatGPT | `{connector_id}.web-sandbox.oaiusercontent.com`  | Auto-assigned by ChatGPT; ignores the `domain` field. |
+
+  Since ChatGPT ignores `domain` entirely, this function generates a Claude-compatible
+  value so that a single configuration works across both hosts.
+
+  When `domain` is set to `:auto` (the default), this is called automatically at
+  request time using the server URL derived from the incoming connection.
+
+  ## Examples
+
+      iex> AshAi.Mcp.Server.sandbox_domain("http://localhost:4000/mcp")
+      "0307c5dc3988887979d60ecbb5101189.claudemcpcontent.com"
+
+  """
+  def sandbox_domain(server_url) when is_binary(server_url) do
+    claude_domain(server_url)
+  end
+
+  defp resolve_domain(:auto, opts) do
+    case opts[:server_url] do
+      nil -> nil
+      server_url -> sandbox_domain(server_url)
+    end
+  end
+
+  defp resolve_domain(domain, _opts), do: domain
+
+  @doc false
+  def claude_domain(server_url) when is_binary(server_url) do
+    :crypto.hash(:sha256, server_url)
+    |> Base.encode16(case: :lower)
+    |> binary_part(0, 32)
+    |> Kernel.<>(".claudemcpcontent.com")
   end
 
   defp put_if(map, _key, nil), do: map

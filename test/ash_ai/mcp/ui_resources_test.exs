@@ -48,7 +48,7 @@ defmodule AshAi.Mcp.UiResourcesTest do
       assert csp_resource["_meta"]["ui"]["prefersBorder"] == true
     end
 
-    test "UI resource without CSP/permissions has no _meta" do
+    test "UI resource with default :auto domain includes computed domain in _meta" do
       session_id = initialize_and_get_session_id(@opts)
 
       response = list_resources(session_id, @opts)
@@ -57,7 +57,7 @@ defmodule AshAi.Mcp.UiResourcesTest do
       resources = body["result"]["resources"]
       plain_resource = Enum.find(resources, &(&1["uri"] == "ui://test/app.html"))
 
-      refute Map.has_key?(plain_resource, "_meta")
+      assert plain_resource["_meta"]["ui"]["domain"] =~ ~r/^[0-9a-f]{32}\.claudemcpcontent\.com$/
     end
   end
 
@@ -90,14 +90,14 @@ defmodule AshAi.Mcp.UiResourcesTest do
       assert content["_meta"]["ui"]["prefersBorder"] == true
     end
 
-    test "resources/read omits _meta for UI resource without CSP" do
+    test "resources/read includes auto-computed domain for UI resource without CSP" do
       session_id = initialize_and_get_session_id(@opts)
 
       response = read_resource(session_id, "ui://test/app.html", @opts)
       body = decode_response(response)
 
       [content] = body["result"]["contents"]
-      refute Map.has_key?(content, "_meta")
+      assert content["_meta"]["ui"]["domain"] =~ ~r/^[0-9a-f]{32}\.claudemcpcontent\.com$/
     end
   end
 
