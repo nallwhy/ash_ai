@@ -28,18 +28,7 @@ defmodule AshAi.MixProject do
       dialyzer: [plt_add_apps: [:ash, :mix]],
       description: @description,
       source_url: @source_url,
-      homepage_url: @source_url,
-      preferred_cli_env: [
-        "test.create": :test,
-        "test.migrate": :test,
-        "test.rollback": :test,
-        "test.migrate_tenants": :test,
-        "test.check_migrations": :test,
-        "test.drop": :test,
-        "test.generate_migrations": :test,
-        "test.reset": :test,
-        "test.full_reset": :test
-      ]
+      homepage_url: @source_url
     ]
   end
 
@@ -127,6 +116,22 @@ defmodule AshAi.MixProject do
 
   defp elixirc_paths(_env) do
     ["lib/"]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        "test.create": :test,
+        "test.migrate": :test,
+        "test.rollback": :test,
+        "test.migrate_tenants": :test,
+        "test.check_migrations": :test,
+        "test.drop": :test,
+        "test.generate_migrations": :test,
+        "test.reset": :test,
+        "test.full_reset": :test
+      ]
+    ]
   end
 
   defp package do
